@@ -9,7 +9,8 @@ import { z } from "zod";
 import { ACTIVE_EMOTIONS, EMOTION_LABELS } from "@/app/emotions";
 
 // UI가 바뀜 때마다 반드시 올린다. 호스트가 ui:// 리소스를 URI 기준으로 캐싱한다.
-const UI_VERSION = "2026-07-25-m2-emotions-1";
+// 클라이언트 번들이 바뀌는 변경(예: 에셋 맵 확장)도 UI 변경으로 본다.
+const UI_VERSION = "2026-07-25-m2-emotions-31";
 const RESOURCE_URI = `ui://claude-chan-emoticon/index.html?v=${UI_VERSION}`;
 
 async function fetchPageHtml(): Promise<string> {
@@ -61,7 +62,7 @@ const handler = createMcpHandler(async (server) => {
           .string()
           .max(80)
           .optional()
-          .describe("이미지 아래에 표시할 짧은 설명"),
+          .describe("이미지 아래에 표시할 짧은 설명. 생략하면 감정 라벨이 표시된다"),
       },
       annotations: {
         readOnlyHint: true,
