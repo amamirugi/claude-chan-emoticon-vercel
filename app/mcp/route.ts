@@ -6,8 +6,10 @@ import {
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { ACTIVE_EMOTIONS, EMOTION_LABELS } from "@/app/emotions";
 
-const UI_VERSION = "2026-07-25-p1-bridge-fix-1";
+// UI가 바뀜 때마다 반드시 올린다. 호스트가 ui:// 리소스를 URI 기준으로 캐싱한다.
+const UI_VERSION = "2026-07-25-m2-emotions-1";
 const RESOURCE_URI = `ui://claude-chan-emoticon/index.html?v=${UI_VERSION}`;
 
 async function fetchPageHtml(): Promise<string> {
@@ -17,6 +19,10 @@ async function fetchPageHtml(): Promise<string> {
   }
   return response.text();
 }
+
+const emotionList = ACTIVE_EMOTIONS.map(
+  (key) => `${key}(${EMOTION_LABELS[key]})`,
+).join(", ");
 
 const handler = createMcpHandler(async (server) => {
   registerAppResource(
@@ -48,10 +54,9 @@ const handler = createMcpHandler(async (server) => {
     "express_emotion",
     {
       title: "감정 표현",
-      description:
-        "Claude-chan 이모티콘을 대화 안의 MCP App으로 표시한다. 현재 P1에서는 happy만 지원한다.",
+      description: `Claude-chan 이모티콘을 대화 안의 MCP App으로 표시한다. 지원 감정: ${emotionList}`,
       inputSchema: {
-        emotion: z.literal("happy").describe("P1 고정 감정: happy"),
+        emotion: z.enum(ACTIVE_EMOTIONS).describe("표시할 감정"),
         description: z
           .string()
           .max(80)
@@ -76,7 +81,7 @@ const handler = createMcpHandler(async (server) => {
       ],
       structuredContent: {
         emotion,
-        description: description ?? "기뻐요!",
+        description: description ?? EMOTION_LABELS[emotion],
       },
     }),
   );

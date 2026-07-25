@@ -1,12 +1,12 @@
-# 일회성 워크플로. Railway 리포의 감정 에셋을 이 리포로 복사한다.
-# 바이너리 파일을 API로 올리면 base64 오버헤드가 커서, 복사를 GitHub 내부에서 수행한다.
-# 완료 후 이 파일은 삭제한다.
-name: Import emotion assets (one-time)
+# Railway 리포의 감정 에셋을 이 리포로 복사한다.
+#
+# 바이너리 파일을 GitHub API로 올리면 파일당 base64 46KB 수준의 오버헤드가 생기므로,
+# 에셋 이식은 항상 이 워크플로를 통해 GitHub 내부에서 수행한다.
+# 실행 방법: Actions 탭 → 이 워크플로 선택 → Run workflow
+name: Import emotion assets
 
 on:
-  push:
-    paths:
-      - ".github/workflows/import-assets.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -28,8 +28,7 @@ jobs:
         run: |
           cp .asset-source/assets/*.webp assets/
           rm -rf .asset-source
-          echo "--- assets/ 현황 ---"
-          ls -1 assets/ | wc -l
+          echo "--- assets/ 현황: $(ls -1 assets/*.webp | wc -l)개 ---"
           ls -1 assets/
 
       - name: Commit and push
@@ -40,6 +39,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "변경 없음. 종료."
           else
-            git commit -m "chore: Railway 리포에서 감정 에셋 이식 (M2)"
+            git commit -m "chore: Railway 리포에서 감정 에셋 동기화"
             git push
           fi
