@@ -3,9 +3,12 @@
  *
  * 이미지를 import하지 않으므로 서버(route.ts)와 클라이언트(page.tsx) 양쪽에서 안전하게 쓸 수 있다.
  * 실제 에셋 매핑은 `emotion-assets.ts`에 있다.
+ *
+ * 감정을 추가하려면 여기에 키를 넣고 `emotion-assets.ts`에 에셋을 등록한다.
+ * 에셋을 빼먹으면 빌드가 실패한다.
  */
 
-/** assets/에 존재하는 고유 감정 키 31종 전체. */
+/** assets/에 존재하는 고유 감정 키 31종. */
 export const EMOTION_LABELS = {
   neutral: "기본",
   happy: "기쁨",
@@ -43,11 +46,12 @@ export const EMOTION_LABELS = {
 export type Emotion = keyof typeof EMOTION_LABELS;
 
 /**
- * 현재 툴 스키마가 받는 감정.
- *
- * M2 검증 단계라 3종만 열어둔다. 구조가 확인되면 `EMOTION_LABELS`의 키 전체로 확장한다.
- * 여기에 키를 추가하고 `emotion-assets.ts`에 에셋을 빼먹으면 빌드가 실패한다.
+ * 툴 스키마가 받는 감정 목록. 현재는 정의된 키 전체다.
+ * z.enum이 리터럴 튜플을 요구하므로 단언 배열로 단언한다.
  */
-export const ACTIVE_EMOTIONS = ["happy", "sad", "thinking"] as const;
+export const ACTIVE_EMOTIONS = Object.keys(EMOTION_LABELS) as [
+  Emotion,
+  ...Emotion[],
+];
 
-export type ActiveEmotion = (typeof ACTIVE_EMOTIONS)[number];
+export type ActiveEmotion = Emotion;
