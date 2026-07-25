@@ -53,5 +53,3 @@ export const ACTIVE_EMOTIONS = Object.keys(EMOTION_LABELS) as [
   Emotion,
   ...Emotion[],
 ];
-
-export type ActiveEmotion = Emotion;

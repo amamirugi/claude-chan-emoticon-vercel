@@ -1,21 +1,31 @@
 "use client";
 
 import Image from "next/image";
+import { useMemo } from "react";
 import { EMOTION_ASSETS } from "./emotion-assets";
-import { EMOTION_LABELS, type ActiveEmotion } from "./emotions";
+import { EMOTION_LABELS, type Emotion } from "./emotions";
 import { useMcpApp } from "./hooks/use-mcp-app";
 
-function isRenderable(value: unknown): value is ActiveEmotion {
+function isRenderable(value: unknown): value is Emotion {
   return typeof value === "string" && value in EMOTION_ASSETS;
 }
 
 export default function Home() {
   const { connected, toolInput, toolResult } = useMcpApp();
   const data = (toolResult ?? toolInput) as Record<string, unknown> | null;
-  const emotion = data?.emotion;
+  const rawEmotion = data?.emotion;
+  const emotion = isRenderable(rawEmotion) ? rawEmotion : null;
   const description = data?.description;
 
-  if (!isRenderable(emotion)) {
+  // 변형이 있는 감정은 매 호출마다 다른 그림이 나온다.
+  // 감정이 바뀌지 않는 한 재렌더에서는 같은 그림을 유지해야 하므로 memo한다.
+  const asset = useMemo(() => {
+    if (!emotion) return null;
+    const variants = EMOTION_ASSETS[emotion];
+    return variants[Math.floor(Math.random() * variants.length)];
+  }, [emotion]);
+
+  if (!emotion || !asset) {
     return (
       <main>
         <p className="waiting">
@@ -34,7 +44,7 @@ export default function Home() {
     <main>
       <Image
         className="emotion-image"
-        src={EMOTION_ASSETS[emotion]}
+        src={asset}
         alt={`Claude-chan ${emotion} emoticon`}
         priority
       />
