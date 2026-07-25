@@ -1,0 +1,45 @@
+# 일회성 워크플로. Railway 리포의 감정 에셋을 이 리포로 복사한다.
+# 바이너리 파일을 API로 올리면 base64 오버헤드가 커서, 복사를 GitHub 내부에서 수행한다.
+# 완료 후 이 파일은 삭제한다.
+name: Import emotion assets (one-time)
+
+on:
+  push:
+    paths:
+      - ".github/workflows/import-assets.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+
+      - name: Checkout asset source repo
+        uses: actions/checkout@v4
+        with:
+          repository: amamirugi/claude-chan-emoticon-railway
+          path: .asset-source
+
+      - name: Copy assets
+        run: |
+          cp .asset-source/assets/*.webp assets/
+          rm -rf .asset-source
+          echo "--- assets/ 현황 ---"
+          ls -1 assets/ | wc -l
+          ls -1 assets/
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/
+          if git diff --staged --quiet; then
+            echo "변경 없음. 종료."
+          else
+            git commit -m "chore: Railway 리포에서 감정 에셋 이식 (M2)"
+            git push
+          fi
