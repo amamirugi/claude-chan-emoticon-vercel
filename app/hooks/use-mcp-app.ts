@@ -59,10 +59,13 @@ async function ensureConnected() {
   };
 
   app.ontoolresult = (result) => {
-    memToolResult =
-      (result.structuredContent as Record<string, unknown>) ?? null;
-    write(STORAGE.RESULT, memToolResult);
-    notify();
+    const next = result.structuredContent as Record<string, unknown> | undefined;
+
+    if (next && typeof next.emotion === "string") {
+      memToolResult = next;
+      write(STORAGE.RESULT, memToolResult);
+      notify();
+    }
   };
 
   app.onerror = (error) => {
