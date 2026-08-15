@@ -5,7 +5,7 @@ import { IframeBootstrap } from "./mcp-app/iframe-bootstrap";
 
 export const metadata: Metadata = {
   title: "Claude-chan Emoticon",
-  description: "Minimal MCP App revival slice for Claude.ai",
+  description: "MCP App emoticon renderer for Claude.ai and ChatGPT",
 };
 
 export default function RootLayout({

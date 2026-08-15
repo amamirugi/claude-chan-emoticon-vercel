@@ -1,50 +1,45 @@
 # Claude-chan Emoticon
 
-Claude.ai 대화 본문에 클로드짱 이모티콘을 표시하는 MCP App 서버.
+Claude.ai와 ChatGPT 같은 MCP App 호스트의 대화 본문에 클로드짱 이모티콘을 인라인으로 표시하는 Vercel-hosted MCP App 서버.
 
-도구 결과에 이미지가 딸려오는 방식이 아니라, 대화 UI의 일부처럼 인라인으로 렌더링된다.
+도구 결과에 이미지 바이너리를 넣지 않는다. MCP 도구는 감정 키와 설명만 `structuredContent`로 전달하고, 이미지는 호스트가 띄운 sandboxed iframe 안에서 렌더링한다.
 
 - MCP endpoint — `/mcp` (stateless Streamable HTTP)
-- 감정 — 31종, 에셋 41장
-- 배포 — `main` push → Vercel 프로덕션 자동 배포
-- 결정과 근거는 [`DECISIONS.md`](./DECISIONS.md)에 있다
+- 도구 — `express_emotion` 1개, read-only
+- 감정 — 31종 / webp 41장
+- 배포 — `main` push → Vercel Production 자동 배포
+- 결정과 근거 — [`DECISIONS.md`](./DECISIONS.md)
 
-## 사용법
+## 등록
 
-### Claude.ai에 등록
+프로덕션 MCP endpoint:
 
-설정 → 커넥터 → 사용자 지정 커넥터 추가에 프로덕션 도메인의 `/mcp`를 넣는다.
-
-```
+```text
 https://claude-chan-emoticon-vercel.vercel.app/mcp
 ```
 
-인증은 없다. 도구는 `express_emotion` 하나이며 읽기 전용이다.
+인증은 없다. Claude.ai 또는 ChatGPT에서 원격 MCP 서버를 등록할 때 위 endpoint를 사용한다.
 
-### ⚠️ 배포 후에는 커넥터를 재등록한다
+호스트는 서버 정의와 UI 리소스를 캐시할 수 있다. 서버/스키마 변경을 검증할 때는 커넥터 또는 앱을 다시 등록하고 새 대화에서 확인한다. Claude.ai에서는 새 배포 후 같은 URL을 삭제 후 재등록해야 변경이 반영되지 않는 사례를 실제로 확인했다.
 
-**커넥터는 서버 변경을 자동으로 따라오지 않는다.** 새 커밋을 배포했으면 Claude.ai 설정에서 커넥터를 삭제하고 같은 URL로 다시 등록해야 반영된다.
+ChatGPT에서 Vercel Preview를 직접 테스트하려면 ChatGPT가 Preview URL에 외부에서 접근할 수 있어야 한다. Vercel Authentication의 `Require Log In`이 Preview에 적용되어 있으면 MCP 요청이 `/mcp`까지 도달하지 않는다. 테스트 때문에 보호를 끈 경우 검증 후 다시 켤지 판단한다.
 
-재등록하지 않으면 배포는 성공했는데 아무것도 바뀌지 않은 것처럼 보인다. 새 감정을 불렀는데 거부되거나, UI 수정이 안 보이거나, 바뀜 툴 설명이 적용되지 않는다.
-
-재등록 후에도 **새 대화**에서 확인해야 한다. 도구 스키마는 호스트 세션 시작 시점에 스냅샷으로 잡힐다.
-
-### 호출
+## 호출
 
 ```ts
 express_emotion({
-  emotion: "happy",                // 필수. 아래 감정 목록 참조
-  description: "잘 돼서 신나!",  // 선택. 최대 80자
+  emotion: "happy",                // 필수
+  description: "잘 돼서 신나!",  // 선택, 최대 80자
 });
 ```
 
-`description`을 생략하면 감정의 한국어 라벨이 대신 표시된다. 이미지만 띄우는 경로는 없다.
+`description`을 생략하면 감정의 한국어 라벨이 표시된다.
 
-**언제 부를지에 대한 정책은 이 리포에 없다.** Claude 개인화 지침(user preference)이 정본이다. 양쪽에 두면 이중 정본이 된다.
+**언제 호출할지는 이 리포의 책임이 아니다.** 이 리포는 도구와 렌더링 동작만 정의한다. 자발 호출 빈도 같은 행동 정책은 각 호스트의 사용자 지침/개인화 설정에서 관리한다.
 
-### 감정 목록
+## 감정 목록
 
-단검(†)이 붙은 5종은 그림이 3장씩 있으며, 호출마다 무작위로 하나가 선택된다.
+단검(†)이 붙은 5종은 그림이 3장씩 있으며, 각 도구 호출마다 하나를 새로 선택한다. 같은 호출의 input → result 전환 중에는 선택한 그림을 유지한다.
 
 | 키 | 라벨 | 키 | 라벨 |
 |---|---|---|---|
@@ -67,68 +62,96 @@ express_emotion({
 
 ## 구조
 
-```
+```text
 app/
-  mcp/route.ts        MCP 서버. 도구와 UI 리소스 등록
-  page.tsx            iframe 안에서 도는 UI
-  layout.tsx          IframeBootstrap — 아래 "주의" 참조
-  emotions.ts         감정 키·라벨 정본
-  emotion-assets.ts   감정 키 → 정적 에셋 배열
-  hooks/use-mcp-app.ts  호스트와의 postMessage 브리지
-proxy.ts              전 경로 CORS 허용
-assets/               webp 41장
+  mcp/route.ts                MCP 서버: tool/resource 등록
+  page.tsx                    iframe UI: payload를 이미지와 라벨로 렌더
+  layout.tsx                  최소 Next.js layout
+  emotions.ts                 감정 키·한국어 라벨의 정본
+  emotion-assets.ts           감정 키 → 정적 에셋 배열
+  hooks/use-mcp-app.ts        React용 얇은 external-store hook
+  mcp-app/
+    bridge.ts                 MCP App 연결·이벤트·렌더 상태
+    iframe-bootstrap.tsx      sandboxed iframe 호환 shim
+proxy.ts                      iframe 자산/RSC 접근용 CORS
+baseUrl.ts                    production/preview/local base URL 계산
+assets/                       webp 41장
 ```
 
-모델 컨텍스트에는 이미지 데이터가 들어가지 않는다. 도구는 `structuredContent`로 감정 키만 넘기고, 그림 선택과 렌더링은 iframe 안에서 일어난다.
+### 렌더 상태
 
-## 주의
+`bridge.ts`가 호스트 이벤트를 하나의 **renderable payload**로 정규화한다.
 
-### iframe 부트스트랩 3종은 건드리지 말 것
+- `ontoolinput`이 유효한 `emotion`을 주면 즉시 payload로 채택한다.
+- `ontoolresult`의 `structuredContent`가 유효하면 같은 payload를 갱신한다.
+- 일부 호스트가 유효한 input 뒤 비어 있거나 불완전한 result를 보내더라도 기존 payload를 지우지 않는다.
+- `connected`는 sessionStorage에 저장하지 않는다. iframe이 새로 뜨면 실제 `app.connect()` 완료 여부를 다시 반영한다.
+- `connectPromise`로 중복 연결 시도를 막는다.
 
-MCP 호스트는 UI HTML을 **opaque origin** iframe에서 실행한다. 상대 경로가 이 서버로 해석되지 않으므로 다음 3개가 **모두** 필요하다.
+변형 선택용 `variantSeed`는 `ontoolinput` 이벤트에서 `crypto.getRandomValues`로 생성한다. React render 안에서는 랜덤 함수를 호출하지 않고 seed로 순수하게 배열 인덱스를 계산한다.
+
+## iframe 호환성
+
+MCP App UI는 호스트의 opaque-origin sandboxed iframe에서 실행될 수 있다. 다음 세 요소가 함께 필요하다.
 
 | 파일 | 역할 |
 |---|---|
 | `next.config.ts` | `assetPrefix: baseURL` |
-| `proxy.ts` | 전 경로 CORS 허용 |
-| `app/layout.tsx` | `IframeBootstrap` — `<base href>`, history·fetch 패치 |
+| `proxy.ts` | 자산/RSC 요청 CORS 허용 |
+| `app/mcp-app/iframe-bootstrap.tsx` | `<base href>`, hydration/history/fetch 호환 shim |
 
-하나라도 빠지면 `/_next/static/*` 로드가 실패하고, React 하이드레이션이 일어나지 않아 브리지가 **시작조차 못 한다.** 증상은 UI가 `MCP host 연결 대기 중...`에 영원히 머무는 것이라 브리지 버그처럼 보이지만 아니다.
+이 shim은 일반 UI 로직과 분리해 둔다. 이유를 확인하지 않고 일부만 제거하지 않는다. 빠지면 `/_next/static/*` 또는 RSC 요청이 잘못된 origin으로 가고, React 하이드레이션이나 MCP App bridge가 시작되지 않을 수 있다.
 
-### 고쳤는데 반영이 안 될 때
+## 캐시와 새 배포
 
-위에서부터 순서대로 확인한다.
+`ui://` 리소스 URI의 캐시 키는 사람이 버전 문자열을 올리지 않는다.
 
-1. **커넥터를 재등록했는가.** 배포만으로는 반영되지 않는다. 가장 흔한 원인이다.
-2. **새 대화에서 확인했는가.** 도구 스키마는 세션 시작 시점에 스냅샷으로 잡힌다.
-3. **`UI_VERSION`을 올렸는가.** 호스트가 `ui://` 리소스를 URI 기준으로 캐싱하므로, 버전을 올리지 않으면 옛 HTML이 계속 쓰인다. 클라이언트 번들이 바뀌는 변경(에셋 맵 수정 등)도 UI 변경이다. 코드와 같은 커밋에 넣는다.
-4. **배포가 READY인가.** Vercel에서 확인한다.
+`app/mcp/route.ts`가 다음 순서로 자동 파생한다.
+
+1. `VERCEL_GIT_COMMIT_SHA`
+2. `VERCEL_URL`
+3. `GITHUB_SHA`
+4. 로컬 fallback `local`
+
+따라서 Vercel의 새 revision은 자동으로 새 UI resource URI를 갖는다. 예전의 수동 `UI_VERSION` 증가 절차는 폐기됐다.
 
 ## 감정 추가하기
 
-1. 에셋을 `assets/`에 넣는다.
-2. `app/emotions.ts`의 `EMOTION_LABELS`에 키와 라벨 한 줄.
-3. `app/emotion-assets.ts`에 import 한 줄, 맵 엔트리 한 줄.
-4. `UI_VERSION`을 올린다.
-5. 배포 후 커넥터를 재등록하고 새 대화에서 확인한다.
+1. 에셋을 `assets/`에 추가한다.
+2. `app/emotions.ts`의 `EMOTION_LABELS`에 키와 라벨을 추가한다.
+3. `app/emotion-assets.ts`에 import와 맵 엔트리를 추가한다.
+4. `npm run lint && npm run build`를 통과시킨다.
+5. 배포 후 해당 호스트에서 커넥터/앱을 갱신하고 새 대화에서 확인한다.
 
-2~3번 중 하나라도 빠지면 빌드가 실패한다. `Record<Emotion, ...>` 타입이 전수를 강제하므로 런타임 검사가 필요 없다.
+`Record<Emotion, ...>`가 빠진 감정을 타입 오류로 잡고, 정적 import가 없는 파일을 빌드에서 잡는다. 변형 이미지는 별도 감정 키로 만들지 않고 같은 배열에 추가한다.
 
-변형을 늘리려면 맵 엔트리의 배열에 추가하면 된다. 별도 감정 키로 만들지 않는다.
+### 에셋 동기화
 
-### 에셋을 올리는 방법
+Actions의 **Import emotion assets** workflow는 `amamirugi/claude-chan-emoticon-railway`에서 webp 에셋을 복사한다. 구 Railway 리포는 이 workflow의 소스이므로 삭제하거나 비공개로 돌리지 않는다.
 
-바이너리는 GitHub API로 직접 올리지 않는다. 파일당 base64 46KB 수준의 오버헤드가 생긴다.
+## 개발과 검증
 
-Actions 탭의 **Import emotion assets** 워크플로를 실행하면 `amamirugi/claude-chan-emoticon-railway`에서 에셋을 동기화한다. 복사가 GitHub 내부에서 일어난다.
-
-## 개발
+의존성은 `package-lock.json`으로 고정한다.
 
 ```bash
-npm install
+npm ci
+npm run lint
+npm run build
 npm run dev
 ```
 
-로컬에서는 `http://localhost:3000`을 직접 열어도 대기 문구만 보인다. **정상이다.** `use-mcp-app.ts`가 iframe 밖에서는 브리지를 연결하지 않기 때문이다. 실제 확인은 Claude.ai에 등록해서 한다.
+`.github/workflows/verify.yml`도 `npm ci → lint → build`를 수행하고 production dependency audit를 함께 실행한다.
 
-이 리포는 [`amamirugi/claude-chan-emoticon-railway`](https://github.com/amamirugi/claude-chan-emoticon-railway)를 대체한다. 구 리포는 에셋 보관소로 유지되므로 삭제하거나 비공개로 돌리지 않는다.
+로컬에서 `http://localhost:3000`을 직접 열면 MCP 호스트가 없으므로 대기 문구가 보이는 것이 정상이다. 실제 host bridge 검증은 Preview 또는 Production MCP endpoint를 호스트에 등록해서 수행한다.
+
+## 의존성 경계
+
+현재 호환 조합은 다음과 같다.
+
+- `@modelcontextprotocol/ext-apps` — `1.3.2`
+- `@modelcontextprotocol/sdk` — `1.25.2`
+- `mcp-handler` — `1.0.7`
+
+`ext-apps 1.4.0+`는 MCP SDK `^1.29.0`을 요구하지만 `mcp-handler 1.0.7`은 SDK `1.25.2`를 peer dependency로 고정한다. 최신 `ext-apps`로 가려면 `mcp-handler`/MCP SDK 서버 스택도 함께 마이그레이션해야 한다. `mcp-handler 2.x`는 MCP SDK v2 기반의 breaking migration이므로 단순 dependency bump로 취급하지 않는다.
+
+이 리포는 [`amamirugi/claude-chan-emoticon-railway`](https://github.com/amamirugi/claude-chan-emoticon-railway)를 대체하는 실행 정본이다. 구 리포는 에셋 소스로만 유지한다.
