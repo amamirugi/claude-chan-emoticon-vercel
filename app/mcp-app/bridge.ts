@@ -4,16 +4,23 @@ import type { App } from "@modelcontextprotocol/ext-apps";
 
 export type McpRenderPayload = Record<string, unknown>;
 
+type StoredRenderState = {
+  payload: McpRenderPayload;
+  variantSeed: number;
+};
+
 export type McpAppSnapshot = {
   connected: boolean;
   payload: McpRenderPayload | null;
+  variantSeed: number;
   app: App | null;
 };
 
-const STORAGE_KEY = "__mcp_render_payload";
+const STORAGE_KEY = "__mcp_render_state";
 const SERVER_SNAPSHOT: McpAppSnapshot = {
   connected: false,
   payload: null,
+  variantSeed: 0,
   app: null,
 };
 
@@ -25,28 +32,38 @@ function isRenderPayload(value: unknown): value is McpRenderPayload {
   );
 }
 
-function readStoredPayload(): McpRenderPayload | null {
+function readStoredState(): StoredRenderState | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isRenderPayload(parsed) ? parsed : null;
+    const parsed = JSON.parse(raw) as Partial<StoredRenderState>;
+    if (!isRenderPayload(parsed.payload)) return null;
+    if (typeof parsed.variantSeed !== "number") return null;
+    return { payload: parsed.payload, variantSeed: parsed.variantSeed };
   } catch {
     return null;
   }
 }
 
-function writeStoredPayload(payload: McpRenderPayload): void {
+function writeStoredState(state: StoredRenderState): void {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
     // sessionStorage may be unavailable in some hosts.
   }
 }
 
+function createVariantSeed(): number {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return values[0];
+}
+
+const storedState = typeof window === "undefined" ? null : readStoredState();
 let snapshot: McpAppSnapshot = {
   connected: false,
-  payload: typeof window === "undefined" ? null : readStoredPayload(),
+  payload: storedState?.payload ?? null,
+  variantSeed: storedState?.variantSeed ?? 0,
   app: null,
 };
 
@@ -58,10 +75,22 @@ function publish(patch: Partial<McpAppSnapshot>): void {
   for (const listener of listeners) listener();
 }
 
-function acceptPayload(value: unknown): void {
+function acceptToolInput(value: unknown): void {
   if (!isRenderPayload(value)) return;
-  writeStoredPayload(value);
-  publish({ payload: value });
+  const variantSeed = createVariantSeed();
+  writeStoredState({ payload: value, variantSeed });
+  publish({ payload: value, variantSeed });
+}
+
+function acceptToolResult(value: unknown): void {
+  if (!isRenderPayload(value)) return;
+
+  // A result belongs to the input already being rendered, so preserve its
+  // variant seed. If a host delivers a result without an input event, create
+  // a seed here so the result can still render on its own.
+  const variantSeed = snapshot.payload ? snapshot.variantSeed : createVariantSeed();
+  writeStoredState({ payload: value, variantSeed });
+  publish({ payload: value, variantSeed });
 }
 
 export function subscribeMcpApp(listener: () => void) {
@@ -90,14 +119,14 @@ export function ensureMcpAppConnected(): Promise<void> {
     );
 
     app.ontoolinput = (params) => {
-      acceptPayload(params.arguments);
+      acceptToolInput(params.arguments);
     };
 
     app.ontoolresult = (result) => {
       // Some hosts send an empty/incomplete structuredContent after a valid
       // tool-input event. Ignore non-renderable results instead of erasing the
       // last payload that can still be displayed.
-      acceptPayload(result.structuredContent);
+      acceptToolResult(result.structuredContent);
     };
 
     app.onerror = (error) => {
