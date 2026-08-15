@@ -7,12 +7,12 @@
 
 ### 구조
 
-- 이 리포는 기존 Railway 리포(`amamirugi/claude-chan-emoticon-railway`)를 대체하는 실행 정본이다.
+- 이 리포는 기존 Railway 리포(`amamirugi/claude-chan-emoticon-railway`)를 대체하는 실행·에셋 정본이다.
 - 기본 브랜치 `main`은 Vercel Production Branch다. `main` push는 즉시 프로덕션 배포이므로 실험 브랜치에서 검증한 뒤 명시적으로 채택한다.
 - MCP endpoint는 `/mcp` 단일이며 stateless Streamable HTTP만 사용한다.
 - 결과 이미지는 raw MCP `type: image`가 아니라 MCP App iframe 내부에서 렌더링한다.
 - MCP 도구는 `structuredContent`로 감정 키와 description만 전달한다. 모델 컨텍스트에 이미지 데이터를 넣지 않는다.
-- 에셋은 이 리포에 자체 포함하며 런타임 외부 이미지 호스팅에 의존하지 않는다.
+- 에셋은 이 리포에 자체 포함하며 런타임 외부 이미지 호스팅이나 외부 리포의 에셋 소스에 의존하지 않는다.
 - 활성 호스트 범위는 Claude.ai와 ChatGPT다. 호스트별 편차는 서버 계약을 분기하기보다 bridge 호환 계층에서 흡수한다.
 
 ### iframe 부트스트랩
@@ -74,6 +74,13 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 - `app/mcp-app/iframe-bootstrap.tsx` — host iframe compatibility shim
 - `app/page.tsx` — bridge snapshot을 받아 순수 렌더
 
+### 에셋 정본
+
+- `assets/`가 감정 이미지의 정본이다. 현재 31개 감정에 필요한 webp 41장을 이 리포가 자체 보유한다.
+- 과거 `.github/workflows/import-assets.yml`이 Railway 리포를 checkout해 에셋을 복사했으나, Vercel 리포에 필요한 에셋이 이미 자체 blob으로 존재하므로 해당 workflow와 소스 의존성을 제거한다.
+- 새 바이너리 에셋은 이 리포에 직접 commit/push한다. 텍스트용 GitHub API wrapper로 바이너리를 직접 업로드하는 방식은 사용하지 않는다.
+- 외부 리포를 다시 에셋 정본으로 두지 않는다. 자동화가 필요하면 이 리포 내부에서 완결되는 workflow로 만든다.
+
 ### UI resource cache
 
 - 호스트가 `ui://` resource URI를 기준으로 캐시할 수 있으므로 revision마다 URI가 달라야 한다.
@@ -96,12 +103,13 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 - 도구 schema와 host metadata는 세션/커넥터 수준에서 캐시될 수 있다. 서버/스키마 변경 검증은 커넥터 또는 앱 갱신 후 새 대화에서 한다.
 - Claude.ai에서 새 배포 후 같은 connector URL을 삭제 후 재등록해야 변경이 반영되는 사례를 실제로 확인했다.
 - ChatGPT에서 Vercel Preview가 `Require Log In`으로 보호되어 있으면 ChatGPT 요청이 `/mcp`까지 도달하지 않을 수 있다.
-- 바이너리 에셋은 GitHub API로 직접 올리지 않는다. `.github/workflows/import-assets.yml`로 구 Railway 리포에서 복사한다.
+- 바이너리 에셋의 정본은 이 리포의 `assets/`이며 일반 Git commit/push 흐름으로 관리한다.
 
 ### 구 리포 처리
 
-- `claude-chan-emoticon-railway`는 아카이브/삭제/비공개 전환하지 않는다.
-- 실행 정본은 이 Vercel 리포지만 에셋 동기화 workflow가 Railway 리포를 source로 사용한다. 이 의존성을 제거하기 전까지 보존한다.
+- `claude-chan-emoticon-railway`는 더 이상 런타임·빌드·에셋 소스 의존성이 아니다.
+- 이번 의존성 제거 작업은 구 Railway 리포 자체를 수정·아카이브·삭제하지 않는다.
+- 구 리포의 아카이브/삭제 여부는 필요할 때 별도 결정한다.
 
 ## 2026-08-15 ChatGPT 호환성 사건
 
@@ -153,6 +161,7 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 - `ext-apps 1.7.5` 강제 설치 또는 `--legacy-peer-deps` → peer 불일치를 숨기므로 거부.
 - cleanup과 `mcp-handler 2.x` migration 동시 수행 → 원인/회귀 범위가 커지고 upstream `ext-apps`가 아직 v2로 이행 중이므로 보류.
 - `fetchPageHtml()` self-fetch 제거 → 현재 Vercel/Next MCP App 구조의 의도된 HTML 전달 패턴이다. 별도 standalone UI bundle로 재설계할 명확한 이유가 생기기 전에는 유지한다.
+- Railway 리포를 계속 에셋 정본으로 유지 → Vercel 리포가 필요한 에셋을 이미 자체 보유하고 있어 불필요한 외부 리포 의존성만 만든다.
 
 ## 기록 원칙
 
@@ -170,6 +179,7 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 - Production `/mcp` 응답은 CORS method로 `GET,POST,OPTIONS`를 광고한다.
 - PR #1과 PR #2 모두 merge 전 CI에서 `npm ci`, lint, build, production dependency audit가 통과했다.
 - 최종 `cleanup-v1` Preview와 CORS Preview를 ChatGPT에서 각각 smoke test했고 사용자가 정상 동작한다고 확인했다.
+- Railway 에셋 소스 의존성을 제거하고 Vercel 리포의 `assets/`를 에셋 정본으로 확정했다.
 - CCE renovation v1에서 식별한 필수 구조 부채는 정리 완료했다.
 
 ## 다음 단계
