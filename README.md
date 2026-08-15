@@ -47,7 +47,7 @@ express_emotion({
 | `happy` | 기쁨 | `nervous` | 초조 |
 | `embarrassed` | 당황 | `pout` | 샐짐 |
 | `sad` | 슬픔 | `speechless` | 말문막힘 |
-| `angry` | 화남 | `wink` | 윈크 |
+| `angry` | 화남 | `wink` | 윙크 |
 | `surprised` | 놀람 | `chu` | 뽀뽀 |
 | `love` | 사랑 | `dead` | 사망 |
 | `smug` | 득의 | `disappointed` | 실망 |
@@ -125,9 +125,11 @@ MCP App UI는 호스트의 opaque-origin sandboxed iframe에서 실행될 수 �
 
 `Record<Emotion, ...>`가 빠진 감정을 타입 오류로 잡고, 정적 import가 없는 파일을 빌드에서 잡는다. 변형 이미지는 별도 감정 키로 만들지 않고 같은 배열에 추가한다.
 
-### 에셋 동기화
+### 에셋 관리
 
-Actions의 **Import emotion assets** workflow는 `amamirugi/claude-chan-emoticon-railway`에서 webp 에셋을 복사한다. 구 Railway 리포는 이 workflow의 소스이므로 삭제하거나 비공개로 돌리지 않는다.
+`assets/`가 감정 에셋의 정본이다. 구 Railway 리포에서 복사하던 **Import emotion assets** workflow는 제거했다. 새 에셋은 이 리포에 직접 추가하고 일반 Git commit/push 흐름으로 관리한다.
+
+바이너리 파일은 텍스트용 GitHub API wrapper를 통한 직접 업로드보다 일반 Git 전송을 우선한다. 필요하면 이 리포 내부에서 완결되는 전용 workflow를 별도로 만든다. 외부 리포를 에셋 원본으로 두지 않는다.
 
 ## 개발과 검증
 
@@ -154,4 +156,4 @@ npm run dev
 
 `ext-apps 1.4.0+`는 MCP SDK `^1.29.0`을 요구하지만 `mcp-handler 1.0.7`은 SDK `1.25.2`를 peer dependency로 고정한다. 최신 `ext-apps`로 가려면 `mcp-handler`/MCP SDK 서버 스택도 함께 마이그레이션해야 한다. `mcp-handler 2.x`는 MCP SDK v2 기반의 breaking migration이므로 단순 dependency bump로 취급하지 않는다.
 
-이 리포는 [`amamirugi/claude-chan-emoticon-railway`](https://github.com/amamirugi/claude-chan-emoticon-railway)를 대체하는 실행 정본이다. 구 리포는 에셋 소스로만 유지한다.
+이 리포는 [`amamirugi/claude-chan-emoticon-railway`](https://github.com/amamirugi/claude-chan-emoticon-railway)를 대체하는 실행·에셋 정본이다. 구 리포에 대한 런타임·빌드·에셋 소스 의존성은 없다.
