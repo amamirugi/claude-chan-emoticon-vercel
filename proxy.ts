@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// MCP App iframe은 이 서버와 다른 origin에서 실행되므로, 자산·RSC 요청에 CORS 허용이 필요하다.
-//
-// Next 16에서 middleware 파일 규약이 proxy로 이름이 바뀌었다. 동작은 동일하며
-// `export const config`의 matcher도 그대로 쓴다. proxy는 Node.js 런타임에서 실행된다.
+// MCP App iframe은 이 서버와 다른(때로는 opaque/null) origin에서 실행되므로
+// 앱 HTML과 Next 정적/RSC 자산에는 cross-origin GET이 필요하다.
+// MCP endpoint는 같은 origin 정책과 별개로 remote hosts가 HTTP로 호출하므로
+// POST도 유지한다. PUT/DELETE 같은 사용하지 않는 method는 열지 않는다.
+function allowedMethods(pathname: string): string {
+  return pathname === "/mcp" ? "GET,POST,OPTIONS" : "GET,OPTIONS";
+}
+
 export function proxy(request: NextRequest) {
+  const methods = allowedMethods(request.nextUrl.pathname);
+
   if (request.method === "OPTIONS") {
     const response = new NextResponse(null, { status: 204 });
     response.headers.set("Access-Control-Allow-Origin", "*");
-    response.headers.set(
-      "Access-Control-Allow-Methods",
-      "GET,POST,PUT,DELETE,OPTIONS",
-    );
+    response.headers.set("Access-Control-Allow-Methods", methods);
+    // MCP and Next RSC use non-simple request headers. Keep the header surface
+    // host-compatible while narrowing paths and methods instead.
     response.headers.set("Access-Control-Allow-Headers", "*");
     return response;
   }
@@ -20,12 +25,13 @@ export function proxy(request: NextRequest) {
   return NextResponse.next({
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+      "Access-Control-Allow-Methods": methods,
       "Access-Control-Allow-Headers": "*",
     },
   });
 }
 
 export const config = {
-  matcher: "/:path*",
+  // Only routes consumed cross-origin by the MCP host/view need CORS.
+  matcher: ["/", "/mcp", "/_next/:path*"],
 };
