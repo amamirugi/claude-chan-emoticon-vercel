@@ -11,11 +11,10 @@ function isRenderable(value: unknown): value is Emotion {
 }
 
 export default function Home() {
-  const { connected, toolInput, toolResult } = useMcpApp();
-  const data = (toolResult ?? toolInput) as Record<string, unknown> | null;
-  const rawEmotion = data?.emotion;
+  const { connected, payload } = useMcpApp();
+  const rawEmotion = payload?.emotion;
   const emotion = isRenderable(rawEmotion) ? rawEmotion : null;
-  const description = data?.description;
+  const description = payload?.description;
 
   // 변형이 있는 감정은 매 호출마다 다른 그림이 나온다.
   // 감정이 바뀌지 않는 한 재렌더에서는 같은 그림을 유지해야 하므로 memo한다.
