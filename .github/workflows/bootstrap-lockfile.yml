@@ -1,3 +1,4 @@
+# Temporary cleanup workflow. Remove after package-lock.json is committed.
 name: Bootstrap package lockfile
 
 on:
