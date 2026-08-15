@@ -25,6 +25,20 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 
 호환 shim은 일반 UI 코드와 분리한다. 일부 패치만 제거하면 증상이 bridge 실패처럼 보일 수 있으므로 이유를 확인하지 않고 축소하지 않는다.
 
+### CORS 경계
+
+- CORS 적용 경로는 `/`, `/_next/:path*`, `/mcp`로 제한한다.
+- 페이지와 정적 자산은 `GET,OPTIONS`, MCP endpoint는 `GET,POST,OPTIONS`만 허용한다.
+- `Access-Control-Allow-Origin: *`는 유지한다. MCP App iframe이 opaque/null origin에서 실행될 수 있어 특정 web origin으로 고정하지 않는다.
+- `Access-Control-Allow-Headers: *`도 유지한다. MCP/Next RSC host가 보내는 커스텀 헤더 집합을 애플리케이션이 불필요하게 재정의하지 않는다.
+
+### MCP App HTML 전달
+
+- `app/mcp/route.ts`의 `fetchPageHtml()` self-fetch는 현재 구조에서 의도된 경계다.
+- Next가 생성한 실제 hydration HTML과 배포별 asset URL을 MCP `resources/read`의 `text`로 재사용하기 위해 배포 자신의 `/`를 읽는다.
+- Vercel의 공식 Next.js Apps SDK starter도 동일하게 배포 페이지를 fetch해 widget HTML로 전달하는 패턴을 사용한다.
+- self-fetch를 완전히 제거하려면 MCP App UI를 별도 standalone/single-file bundle로 분리해야 하므로 cleanup 수준의 최적화로 취급하지 않는다.
+
 ### 감정 시스템
 
 - 감정 키는 **31개**이며 전부 활성화되어 있다.
@@ -69,11 +83,12 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 ### 의존성과 재현성
 
 - `package-lock.json`을 커밋하고 설치는 `npm ci`를 기준으로 한다.
-- `.github/workflows/verify.yml`은 `npm ci → npm run lint → npm run build`를 수행하고 production dependency audit도 실행한다.
+- `.github/workflows/verify.yml`은 모든 branch push와 PR에서 `npm ci → npm run lint → npm run build`를 수행하고 production dependency audit도 실행한다.
 - ESLint 9 flat config(`eslint.config.mjs`)를 유지한다.
 - 현재 MCP v1 호환 조합은 `@modelcontextprotocol/ext-apps 1.3.2`, `@modelcontextprotocol/sdk 1.25.2`, `mcp-handler 1.0.7`이다.
 - `ext-apps 1.4.0+`는 SDK `^1.29.0`을 요구하지만 `mcp-handler 1.0.7`은 SDK `1.25.2`를 peer로 고정한다. 현재 서버 스택에서 가능한 ext-apps 상한은 1.3.2다.
-- `mcp-handler 2.x`는 MCP SDK v2 / 새 server package와 registration API를 요구하는 breaking migration이다. 단순 dependency update로 섞지 않고 별도 작업으로 다룬다.
+- `mcp-handler 2.x`는 MCP SDK v2 / 새 server package와 registration API를 요구하는 breaking migration이다.
+- 2026-08-15 기준 최신 `ext-apps 1.7.5`도 MCP SDK v1 package를 peer로 사용하고 있고, 공식 `modelcontextprotocol/ext-apps#702`에서 v2 migration이 진행 중이다. upstream 공식 지원이 나오기 전에는 CCE가 자체 호환층을 만들지 않는다.
 
 ### 운영 규칙
 
@@ -125,6 +140,8 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 - bridge lifecycle, tool input/result, storage, React store 결합 → bridge와 React hook 분리
 - iframe compatibility patch가 `layout.tsx`에 혼재 → 전용 shim 모듈로 격리
 - 수동 `UI_VERSION` 누락 가능성 → deployment-derived cache key로 자동화
+- 모든 route에 과도하게 열려 있던 CORS → MCP App에 필요한 경로/메서드로 축소
+- CI가 `cleanup-v1` push에만 묶여 있던 설정 → 모든 branch push/PR 검증으로 일반화
 
 ## 기각/보류된 대안
 
@@ -134,8 +151,8 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 - `/img/:emotion` 라우트 → Next.js static import 유지.
 - 변형 에셋을 별도 감정 키로 승격 → 같은 키의 variants로 유지.
 - `ext-apps 1.7.5` 강제 설치 또는 `--legacy-peer-deps` → peer 불일치를 숨기므로 거부.
-- cleanup과 `mcp-handler 2.x` migration 동시 수행 → 원인/회귀 범위가 커지므로 분리.
-- 현재 `proxy.ts` CORS 축소와 `fetchPageHtml()` self-fetch 제거 → 개선 후보지만 host compatibility에 직접 닿으므로 별도 작업으로 분리.
+- cleanup과 `mcp-handler 2.x` migration 동시 수행 → 원인/회귀 범위가 커지고 upstream `ext-apps`가 아직 v2로 이행 중이므로 보류.
+- `fetchPageHtml()` self-fetch 제거 → 현재 Vercel/Next MCP App 구조의 의도된 HTML 전달 패턴이다. 별도 standalone UI bundle로 재설계할 명확한 이유가 생기기 전에는 유지한다.
 
 ## 기록 원칙
 
@@ -146,21 +163,21 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 ## 현재 상태
 
 - PR #1 `refactor: stabilize multi-host MCP app bridge`를 `main`에 squash merge했다.
-- Production 채택 커밋: `9542d45fdca63ff208abe82231969cfeba56000a`.
-- 해당 Vercel Production 배포가 `READY`임을 확인했다.
-- canonical `https://claude-chan-emoticon-vercel.vercel.app/mcp`가 `/mcp` route로 매칭되며 GET에는 의도된 JSON-RPC 405를 반환함을 확인했다.
-- merge 전 PR CI에서 `npm ci`, lint, build, production dependency audit가 모두 통과했다.
-- 최종 `cleanup-v1` Preview를 ChatGPT에서 smoke test했고 사용자가 정상 동작한다고 확인했다. 이미지 유지, description 표시, 같은 감정의 후속 호출이 정상 범위에 포함된다.
-- cleanup 브랜치에서 발견한 구조 부채는 이번 범위에서 정리 완료했다.
+- PR #2 `refactor: narrow MCP app CORS surface`를 `main`에 squash merge했다.
+- 최신 기능 Production 채택 커밋은 `1f4c0692d20ddde8bad62838d5ce5f28f105b865`다.
+- PR #2 Vercel Production 배포가 `READY`임을 확인했다.
+- canonical `https://claude-chan-emoticon-vercel.vercel.app/mcp`가 `/mcp` route로 매칭되며 GET에는 의도된 JSON-RPC 405를 반환한다.
+- Production `/mcp` 응답은 CORS method로 `GET,POST,OPTIONS`를 광고한다.
+- PR #1과 PR #2 모두 merge 전 CI에서 `npm ci`, lint, build, production dependency audit가 통과했다.
+- 최종 `cleanup-v1` Preview와 CORS Preview를 ChatGPT에서 각각 smoke test했고 사용자가 정상 동작한다고 확인했다.
+- CCE renovation v1에서 식별한 필수 구조 부채는 정리 완료했다.
 
 ## 다음 단계
 
-현재 cleanup 범위에 필수 작업은 없다. Production을 실사용하며 Claude/ChatGPT host 회귀가 나타나는지만 관찰한다.
+**CCE renovation v1은 완료 상태다.** Production을 실사용하며 Claude/ChatGPT host 회귀가 나타나는지만 관찰한다.
 
-후속 후보는 별도 작업으로 취급한다.
+후속 작업은 새 필요가 생길 때 별도 범위로 연다.
 
-- `mcp-handler 2.x` / MCP SDK v2 migration 조사
-- CORS scope 축소
-- `fetchPageHtml()` self-fetch 제거 가능성 검토
+- `modelcontextprotocol/ext-apps#702` 및 MCP Apps의 SDK v2 공식 지원이 완료된 뒤 `mcp-handler 2.x` / MCP SDK v2 migration 재검토
 - 말풍선/이미지 크기/여백 조정
 - 새 감정 에셋 추가
