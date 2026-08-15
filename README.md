@@ -12,15 +12,25 @@ Claude.ai와 ChatGPT 같은 MCP App 호스트의 대화 본문에 클로드짱 �
 
 ## 등록
 
-프로덕션 MCP endpoint:
+호스트별 운영 MCP endpoint:
+
+Claude.ai:
+
+```text
+https://claude-chan-emoticon-vercel-git-main-amamirugis-projects.vercel.app/mcp
+```
+
+ChatGPT:
 
 ```text
 https://claude-chan-emoticon-vercel.vercel.app/mcp
 ```
 
-인증은 없다. Claude.ai 또는 ChatGPT에서 원격 MCP 서버를 등록할 때 위 endpoint를 사용한다.
+인증은 없다.
 
-호스트는 서버 정의와 UI 리소스를 캐시할 수 있다. 서버/스키마 변경을 검증할 때는 커넥터 또는 앱을 다시 등록하고 새 대화에서 확인한다. Claude.ai에서는 새 배포 후 같은 URL을 삭제 후 재등록해야 변경이 반영되지 않는 사례를 실제로 확인했다.
+2026-08-15 Claude.ai에서는 canonical hostname의 도구 호출 자체는 성공하지만 MCP App 콘텐츠 렌더링만 실패하는 사례를 실측했다. 같은 Production deployment의 immutable hostname과 stable `main` branch alias는 정상 렌더링됐다. 정확한 Claude 내부 원인은 확정하지 않았으며, canonical hostname이 다시 정상화됐는지 확인하기 전까지 Claude는 위 `main` branch alias를 운영 주소로 사용한다. 자세한 격리 결과는 `DECISIONS.md`에 기록한다.
+
+호스트는 서버 정의와 UI 리소스를 캐시할 수 있다. 서버/스키마 변경을 검증할 때는 커넥터 또는 앱을 다시 등록하고 새 대화에서 확인한다. Claude.ai에서는 새 배포 후 같은 URL을 삭제 후 재등록해야 변경이 반영되는 사례를 실제로 확인했다. 다만 이 절차가 canonical-hostname renderer failure 자체를 해결하지는 않았다.
 
 ChatGPT에서 Vercel Preview를 직접 테스트하려면 ChatGPT가 Preview URL에 외부에서 접근할 수 있어야 한다. Vercel Authentication의 `Require Log In`이 Preview에 적용되어 있으면 MCP 요청이 `/mcp`까지 도달하지 않는다. 테스트 때문에 보호를 끈 경우 검증 후 다시 켤지 판단한다.
 
