@@ -101,7 +101,10 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 
 - `main`은 production이므로 실험용 push를 하지 않는다.
 - 도구 schema와 host metadata는 세션/커넥터 수준에서 캐시될 수 있다. 서버/스키마 변경 검증은 커넥터 또는 앱 갱신 후 새 대화에서 한다.
-- Claude.ai에서 새 배포 후 같은 connector URL을 삭제 후 재등록해야 변경이 반영되는 사례를 실제로 확인했다.
+- Claude.ai에서 새 배포 후 같은 connector URL을 삭제 후 재등록해야 변경이 반영되는 사례를 실제로 확인했다. 단, 이는 schema/resource 갱신 절차이며 아래의 canonical-hostname renderer failure를 해결하지는 못했다.
+- Claude.ai 운영 MCP 주소는 `https://claude-chan-emoticon-vercel-git-main-amamirugis-projects.vercel.app/mcp`를 사용한다. 이 Vercel `main` branch alias는 새 `main` Production 배포를 따라간다.
+- ChatGPT 운영 MCP 주소는 기존 canonical `https://claude-chan-emoticon-vercel.vercel.app/mcp`를 유지한다.
+- Claude에서 canonical hostname의 renderer failure가 해소됐는지 별도로 확인하기 전에는 Claude 운영 주소를 canonical hostname으로 되돌리지 않는다.
 - ChatGPT에서 Vercel Preview가 `Require Log In`으로 보호되어 있으면 ChatGPT 요청이 `/mcp`까지 도달하지 않을 수 있다.
 - 바이너리 에셋의 정본은 이 리포의 `assets/`이며 일반 Git commit/push 흐름으로 관리한다.
 
@@ -139,6 +142,41 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 
 처음 ChatGPT custom MCP 등록 자체가 실패했을 때 Vercel runtime에는 ChatGPT `/mcp` 요청이 없었다. Preview의 `Require Log In` 보호를 해제한 뒤 등록이 성공했다. 이 실패는 MCP initialize가 아니라 Vercel edge protection 단계였다.
 
+## 2026-08-15 Claude canonical hostname renderer failure
+
+### 증상
+
+Claude.ai에서 canonical MCP 주소 `https://claude-chan-emoticon-vercel.vercel.app/mcp`의 도구 호출 자체는 성공했고 모델도 성공한 tool result를 받았지만, 사용자 UI에는 `MCP 앱을 불러오지 못했습니다` / `앱 콘텐츠를 가져오지 못했습니다`가 표시됐다.
+
+Vercel runtime에서는 같은 시간대의 `/mcp`, `/`, Next static chunk, 감정 webp 요청이 대부분 200/202였고 5xx runtime error는 없었다. 따라서 모델이 보는 tool-call 성공과 Claude frontend의 MCP App iframe 렌더 성공은 별도 상태로 취급한다.
+
+### 격리 테스트
+
+동일한 Claude 환경에서 다음을 순서대로 fresh connector로 실측했다.
+
+- renovation 전 기준점 `9821d0c…` Preview — 성공
+- ChatGPT host-compat 수정 `f935ed…` Preview — 성공
+- `ext-apps 1.3.2` `f0b474…` Preview — 성공
+- bridge 분리 `2905518…` Preview — 성공
+- variant seed `fd145fe…` Preview — 성공
+- deployment-derived UI cache key `5a1225…` Preview — 성공
+- iframe host compatibility shim 분리 `71d8b3…` Preview — 성공
+- 현재 `main` 코드와 동일한 별도 Preview — 성공
+- 현재 Production deployment `dpl_DbQkAoHpyVcwrMHp4F5y42e43r1k`의 immutable hostname `claude-chan-emoticon-vercel-4ahsawza3-amamirugis-projects.vercel.app/mcp` — 성공
+- 같은 Production을 가리키는 stable `main` branch alias `claude-chan-emoticon-vercel-git-main-amamirugis-projects.vercel.app/mcp` — 성공
+- canonical hostname은 connector 삭제 후 재등록해도 renderer failure가 유지됨
+
+이 결과로 CCE의 runtime 코드, renovation 변경, 현재 Production build, 동일 commit-derived `ui://` resource URI 자체는 원인에서 배제한다. 실패는 Claude.ai에서 **canonical hostname을 사용했을 때에만** 재현됐다.
+
+Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 확정하지 않는다. hostname 단위의 host-side cache/state가 꼬였다는 설명은 현재 관측과 잘 맞는 가설이지만, 확인된 사실로 승격하지 않는다.
+
+### 운영 결정
+
+- Claude는 stable `main` branch alias를 운영 주소로 사용한다.
+- ChatGPT는 기존 canonical hostname을 계속 사용한다.
+- 이 문제를 고치기 위해 정상인 bridge/CORS/resource cache 코드를 되돌리거나 `_meta.ui.domain`을 임의로 추가하지 않는다.
+- canonical hostname이 Claude에서 다시 정상화됐는지는 필요할 때 별도 smoke test한다.
+
 ## cleanup-v1에서 발견·해결한 잠복 부채
 
 - lockfile 부재 → `package-lock.json` 추가
@@ -162,20 +200,21 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 - cleanup과 `mcp-handler 2.x` migration 동시 수행 → 원인/회귀 범위가 커지고 upstream `ext-apps`가 아직 v2로 이행 중이므로 보류.
 - `fetchPageHtml()` self-fetch 제거 → 현재 Vercel/Next MCP App 구조의 의도된 HTML 전달 패턴이다. 별도 standalone UI bundle로 재설계할 명확한 이유가 생기기 전에는 유지한다.
 - Railway 리포를 계속 에셋 정본으로 유지 → Vercel 리포가 필요한 에셋을 이미 자체 보유하고 있어 불필요한 외부 리포 의존성만 만든다.
+- Claude canonical hostname renderer failure를 해결하기 위해 코드 회귀를 가정하고 renovation 변경을 되돌리는 것 → 같은 코드/빌드가 다른 Vercel hostname에서 Claude 실측 성공했으므로 기각한다.
 
 ## 기록 원칙
 
 - 관찰하지 않은 것을 `실측 확인`으로 적지 않는다.
-- 이번 2026-08-15 작업에서는 Claude quota 소진으로 최종 cleanup Preview를 Claude에서 새로 실측하지 못했다.
-- 사용자가 이번 change set의 Claude 회귀를 **통과로 간주하도록 승인**했으므로 채택 판단에는 사용했지만, 독립적인 Claude 실측 결과로 기록하지 않는다.
+- PR #1 채택 당시에는 Claude quota 소진으로 최종 cleanup Preview를 fresh-test하지 못했고, 사용자가 당시 회귀를 통과로 간주하도록 승인했다. 이를 독립 실측으로 기록하지 않는다.
+- 이후 2026-08-15 canonical hostname renderer failure 조사에서는 위 격리 테스트들을 Claude.ai에서 새로 수행했고 사용자가 각 성공을 직접 확인했다.
 
 ## 현재 상태
 
 - PR #1 `refactor: stabilize multi-host MCP app bridge`를 `main`에 squash merge했다.
 - PR #2 `refactor: narrow MCP app CORS surface`를 `main`에 squash merge했다.
-- 최신 기능 Production 채택 커밋은 `1f4c0692d20ddde8bad62838d5ce5f28f105b865`다.
-- PR #2 Vercel Production 배포가 `READY`임을 확인했다.
-- canonical `https://claude-chan-emoticon-vercel.vercel.app/mcp`가 `/mcp` route로 매칭되며 GET에는 의도된 JSON-RPC 405를 반환한다.
+- 최신 runtime 기능 Production 채택 커밋은 `1f4c0692d20ddde8bad62838d5ce5f28f105b865`다. 이후 Railway asset-source 제거와 문서 정리는 runtime 기능을 변경하지 않았다.
+- 현재 Production deployment의 runtime 코드와 build는 Claude에서 immutable hostname 및 stable `main` branch alias로 fresh smoke test되어 정상 렌더링을 확인했다.
+- canonical `https://claude-chan-emoticon-vercel.vercel.app/mcp`는 HTTP/MCP route 자체는 정상이나, 2026-08-15 Claude.ai에서는 이 hostname에 한해 MCP App renderer failure가 재현됐다.
 - Production `/mcp` 응답은 CORS method로 `GET,POST,OPTIONS`를 광고한다.
 - PR #1과 PR #2 모두 merge 전 CI에서 `npm ci`, lint, build, production dependency audit가 통과했다.
 - 최종 `cleanup-v1` Preview와 CORS Preview를 ChatGPT에서 각각 smoke test했고 사용자가 정상 동작한다고 확인했다.
@@ -184,10 +223,16 @@ ChatGPT에서는 tool input 뒤 도착하는 `ontoolresult`의 UI-visible `struc
 
 ## 다음 단계
 
-**CCE renovation v1은 완료 상태다.** Production을 실사용하며 Claude/ChatGPT host 회귀가 나타나는지만 관찰한다.
+**CCE renovation v1은 완료 상태다.** Production을 실사용하며 Claude/ChatGPT host 회귀를 관찰한다.
+
+운영 주소:
+
+- Claude: `https://claude-chan-emoticon-vercel-git-main-amamirugis-projects.vercel.app/mcp`
+- ChatGPT: `https://claude-chan-emoticon-vercel.vercel.app/mcp`
 
 후속 작업은 새 필요가 생길 때 별도 범위로 연다.
 
+- Claude canonical hostname renderer가 정상화됐는지 필요할 때 재검증
 - `modelcontextprotocol/ext-apps#702` 및 MCP Apps의 SDK v2 공식 지원이 완료된 뒤 `mcp-handler 2.x` / MCP SDK v2 migration 재검토
 - 말풍선/이미지 크기/여백 조정
 - 새 감정 에셋 추가
