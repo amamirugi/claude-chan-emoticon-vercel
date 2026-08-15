@@ -10,7 +10,7 @@ import { ACTIVE_EMOTIONS, EMOTION_LABELS } from "@/app/emotions";
 
 // UI가 바뀜 때마다 반드시 올린다. 호스트가 ui:// 리소스를 URI 기준으로 캐싱한다.
 // 클라이언트 번들이 바뀌는 변경(예: 에셋 맵 확장)도 UI 변경으로 본다.
-const UI_VERSION = "2026-07-25-m4-variants";
+const UI_VERSION = "2026-08-15-chatgpt-sdk-1-3-2";
 const RESOURCE_URI = `ui://claude-chan-emoticon/index.html?v=${UI_VERSION}`;
 
 // 언제 부를지에 대한 정책은 여기에 두지 않는다. 정책의 정본은 Claude 개인화 지침이고,
