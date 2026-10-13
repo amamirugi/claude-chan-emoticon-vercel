@@ -44,9 +44,23 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 - 감정 키는 **31개**이며 전부 활성화되어 있다.
 - `building`, `coding`, `gift`, `reading`, `searching` 5키는 원본에서 미사용이었으나 현재 복구되어 있다.
 - 변형 에셋은 별도 감정 키가 아니라 같은 키의 선택지다. `building`, `coding`, `reading`, `searching`, `thinking` 5종이 각각 3장을 가진다.
+- 의상은 `normal`, `classic`, `capy` 3종이며 각 의상이 31개 감정 키 전부와 같은 변형 구성(41장)을 가진다. 기본 의상은 `normal`이다.
 - 변형 선택은 React render에서 랜덤 함수를 호출하지 않는다. `ontoolinput` 이벤트에서 `crypto.getRandomValues`로 `variantSeed`를 만들고 UI는 seed로 배열 인덱스를 계산한다.
 - 같은 도구 호출의 input → result 전환에서는 seed를 유지한다. 다음 호출에서는 새 seed를 만든다.
 - `description`을 생략하면 감정의 한국어 라벨을 기본값으로 표시한다.
+
+### 의상(outfit)
+
+- 원본처럼 `set_outfit` 툴이 현재 의상을 저장하고, 새 대화에서도 유지한다. 원본은 로컬 `state.json`에 저장하지만 이 서버는 stateless Streamable HTTP라 Vercel private Blob(`state/outfit.json`)에 저장한다.
+- `express_emotion`의 `outfit`은 그 호출에만 적용하는 일회성 지정이고 저장된 의상을 바꾸지 않는다. 생략하면 서버가 저장된 의상, 없으면 `normal`을 채워 `structuredContent.outfit`으로 돌려준다.
+- 저장된 의상은 배포 전체의 전역 값 하나다. 호스트가 대화 ID를 주지 않고 서버에 세션이 없어 키를 나눌 근거가 없다. Claude와 ChatGPT도 공유한다.
+- `set_outfit`에는 인증이 없다. 쓰기 대상이 의상 enum 하나뿐이라 피해 범위가 작다고 보고 감수한다.
+- 읽기는 `useCache: false`로 CDN 캐시를 건너뛴다. `set_outfit` 직후 호출에도 새 의상이 나오게 하기 위해서다.
+- 저장소(`BLOB_READ_WRITE_TOKEN` 또는 `BLOB_STORE_ID`)가 없거나 읽기에 실패해도 감정 표시는 `normal`로 계속한다. `set_outfit`만 오류를 돌려준다.
+- 대안 비교: 모델이 매 호출에 의상을 넘기는 방식은 새 대화에서 초기화된다. iframe storage는 opaque origin 호스트에서 보존이 보장되지 않는다. Upstash Redis는 Marketplace 설치가 필요하고, Edge Config 쓰기는 Vercel API 토큰을 따로 다뤄야 한다. 같은 Vercel 안에서 끝나는 private Blob을 택했다.
+- UI는 모르는 의상 값이 와도 감정 표시를 막지 않고 `normal`로 그린다.
+- `outfit`이 없는 tool input은 바로 그리지 않고 result를 최대 1.5초 기다린다. 바로 그리면 기본 의상이 잠깐 보였다가 저장된 의상으로 바뀐다. 시간 안에 렌더 가능한 result가 오지 않으면 input으로 그린다. 빈 result를 보내는 호스트에서도 감정은 보이게 하기 위해서다.
+- 의상 목록은 `app/emotions.ts`의 `OUTFIT_LABELS`가 정본이고, 원본처럼 폴더를 런타임에 자동 탐색하지 않는다. 정적 import와 타입으로 빠진 에셋을 빌드 타임에 잡기 위해서다.
 
 ### MCP App bridge 상태
 
@@ -56,6 +70,9 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 - `ontoolresult`의 `structuredContent`가 유효할 때만 payload를 갱신한다. 빈 값이나 불완전한 result는 이미 렌더 가능한 payload를 지우지 않는다.
 - `connected`는 sessionStorage에 저장하지 않는다. 새 iframe은 실제 `app.connect()` 성공 여부에서 다시 계산한다.
 - payload와 variant seed만 sessionStorage에 보존한다. 저장소가 없는 호스트에서도 메모리 상태로 동작한다.
+- sessionStorage는 같은 호스트 페이지의 iframe끼리 공유된다. 저장된 상태를 iframe 시작 시 바로 그리면 새 도구 호출에 직전 호출의 그림이 잠깐 보인다(2026-10-13 `set_outfit` 윙크가 다음 호출에 비친 사례). 그래서 상태를 호스트가 주는 `toolInfo.id`와 함께 저장하고, 연결 후 같은 호출 id일 때만 복원한다.
+- 호출 id를 주지 않는 호스트에서는 연결 후 1초 동안 도구 이벤트가 오지 않을 때만 복원한다. 이벤트를 다시 보내지 않고 iframe만 다시 띄우는 경우를 위한 대비다.
+- mock host(AppBridge + Playwright)로 재현·검증했다. 수정 전 두 번째 호출은 `waiting → wink → happy`, 수정 후 `waiting → happy`였고, 같은 호출 id로 이벤트 없이 다시 마운트하면 저장된 그림이 복원됐다.
 - 동시에 여러 `connect()`가 시작되지 않도록 `connectPromise`를 공유한다.
 
 ### 호출 정책
@@ -76,7 +93,8 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 
 ### 에셋 정본
 
-- `assets/`가 감정 이미지의 정본이다. 현재 31개 감정에 필요한 webp 41장을 이 리포가 자체 보유한다.
+- `assets/<outfit>/`가 감정 이미지의 정본이다. 현재 31개 감정 × 의상 3종에 필요한 webp 123장(의상당 41장)을 이 리포가 자체 보유한다.
+- 기존 `assets/` 41장은 원본 배포 zip의 `assets-desktop-normal/`과 파일 단위로 동일함을 확인하고 `assets/normal/`로 옮겼다. `classic`, `capy`는 같은 배포 zip(2026-10-13 수령)의 `assets-desktop-classic/`, `assets-desktop-capy/`를 그대로 추가했다.
 - 과거 `.github/workflows/import-assets.yml`이 Railway 리포를 checkout해 에셋을 복사했으나, Vercel 리포에 필요한 에셋이 이미 자체 blob으로 존재하므로 해당 workflow와 소스 의존성을 제거한다.
 - 새 바이너리 에셋은 이 리포에 직접 commit/push한다. 텍스트용 GitHub API wrapper로 바이너리를 직접 업로드하는 방식은 사용하지 않는다.
 - 외부 리포를 다시 에셋 정본으로 두지 않는다. 자동화가 필요하면 이 리포 내부에서 완결되는 workflow로 만든다.
@@ -107,6 +125,12 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 - Claude에서 canonical hostname의 renderer failure가 해소됐는지 별도로 확인하기 전에는 Claude 운영 주소를 canonical hostname으로 되돌리지 않는다.
 - ChatGPT에서 Vercel Preview가 `Require Log In`으로 보호되어 있으면 ChatGPT 요청이 `/mcp`까지 도달하지 않을 수 있다.
 - 바이너리 에셋의 정본은 이 리포의 `assets/`이며 일반 Git commit/push 흐름으로 관리한다.
+
+### 출처와 라이선스
+
+- 원본은 Canister(canister2668)의 **Claude Desktop Emoticon MCP Server**다. 2026-03-28 arca.live AI 채팅 채널 자료탭에 익명(ㅇㅇ)으로 처음 배포됐고(`166128688`), 2026-04-19 Canister 명의로 V3가 배포됐다(`168123566`). 두 글은 같은 계열이며, 본문·후속 댓글 정황상 같은 작성자로 판단한다(사용자 동의).
+- `express_emotion` 툴 이름, MCP Apps iframe 렌더 구조, 감정 키 체계, 변형 에셋, 의상 3종은 원본에서 왔다. 이 리포는 그것을 Vercel 원격 서버와 Claude.ai/ChatGPT 호스트 호환 구조로 다시 만든 것이다.
+- 원본 LICENSE는 소스 코드와 캐릭터 디자인, 에셋 전부를 CC BY-NC-SA 4.0으로 배포한다. 이 리포는 원본 LICENSE를 그대로 `LICENSE`로 두고 README에 출처를 표시한다. 상업적 사용은 하지 않는다.
 
 ### 구 리포 처리
 
@@ -220,6 +244,7 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - 최종 `cleanup-v1` Preview와 CORS Preview를 ChatGPT에서 각각 smoke test했고 사용자가 정상 동작한다고 확인했다.
 - Railway 에셋 소스 의존성을 제거하고 Vercel 리포의 `assets/`를 에셋 정본으로 확정했다.
 - CCE renovation v1에서 식별한 필수 구조 부채는 정리 완료했다.
+- 2026-10-13 의상 기능(`feat/outfits`)을 private Blob store(`claude-chan-state-blob`, iad1, OIDC 연결)와 함께 브랜치 고정 Preview에서 검증했다. 서버 호출은 직접 확인했고, 사용자가 Claude.ai에서 의상 저장·일회성 의상·잔상 수정이 정상 동작함을 확인한 뒤 PR로 `main`에 채택했다.
 
 ## 다음 단계
 
@@ -236,3 +261,4 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - `modelcontextprotocol/ext-apps#702` 및 MCP Apps의 SDK v2 공식 지원이 완료된 뒤 `mcp-handler 2.x` / MCP SDK v2 migration 재검토
 - 말풍선/이미지 크기/여백 조정
 - 새 감정 에셋 추가
+- 의상 기능 Production 채택 후 운영 커넥터에서 `set_outfit` 노출 확인(필요하면 커넥터 재등록)
