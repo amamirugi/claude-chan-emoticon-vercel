@@ -70,6 +70,9 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 - `ontoolresult`의 `structuredContent`가 유효할 때만 payload를 갱신한다. 빈 값이나 불완전한 result는 이미 렌더 가능한 payload를 지우지 않는다.
 - `connected`는 sessionStorage에 저장하지 않는다. 새 iframe은 실제 `app.connect()` 성공 여부에서 다시 계산한다.
 - payload와 variant seed만 sessionStorage에 보존한다. 저장소가 없는 호스트에서도 메모리 상태로 동작한다.
+- sessionStorage는 같은 호스트 페이지의 iframe끼리 공유된다. 저장된 상태를 iframe 시작 시 바로 그리면 새 도구 호출에 직전 호출의 그림이 잠깐 보인다(2026-10-13 `set_outfit` 윙크가 다음 호출에 비친 사례). 그래서 상태를 호스트가 주는 `toolInfo.id`와 함께 저장하고, 연결 후 같은 호출 id일 때만 복원한다.
+- 호출 id를 주지 않는 호스트에서는 연결 후 1초 동안 도구 이벤트가 오지 않을 때만 복원한다. 이벤트를 다시 보내지 않고 iframe만 다시 띄우는 경우를 위한 대비다.
+- mock host(AppBridge + Playwright)로 재현·검증했다. 수정 전 두 번째 호출은 `waiting → wink → happy`, 수정 후 `waiting → happy`였고, 같은 호출 id로 이벤트 없이 다시 마운트하면 저장된 그림이 복원됐다.
 - 동시에 여러 `connect()`가 시작되지 않도록 `connectPromise`를 공유한다.
 
 ### 호출 정책
