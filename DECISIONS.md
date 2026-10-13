@@ -244,6 +244,7 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - 최종 `cleanup-v1` Preview와 CORS Preview를 ChatGPT에서 각각 smoke test했고 사용자가 정상 동작한다고 확인했다.
 - Railway 에셋 소스 의존성을 제거하고 Vercel 리포의 `assets/`를 에셋 정본으로 확정했다.
 - CCE renovation v1에서 식별한 필수 구조 부채는 정리 완료했다.
+- 2026-10-13 의상 기능(`feat/outfits`)을 private Blob store(`claude-chan-state-blob`, iad1, OIDC 연결)와 함께 브랜치 고정 Preview에서 검증했다. 서버 호출은 직접 확인했고, 사용자가 Claude.ai에서 의상 저장·일회성 의상·잔상 수정이 정상 동작함을 확인한 뒤 PR로 `main`에 채택했다.
 
 ## 다음 단계
 
@@ -260,5 +261,4 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - `modelcontextprotocol/ext-apps#702` 및 MCP Apps의 SDK v2 공식 지원이 완료된 뒤 `mcp-handler 2.x` / MCP SDK v2 migration 재검토
 - 말풍선/이미지 크기/여백 조정
 - 새 감정 에셋 추가
-- private Blob store 생성·연결 후 `feat/outfits` Preview에서 `set_outfit` 저장과 새 대화 유지 smoke test
-- 확인 후 `main` 채택 여부 결정
+- 의상 기능 Production 채택 후 운영 커넥터에서 `set_outfit` 노출 확인(필요하면 커넥터 재등록)
