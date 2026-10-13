@@ -4,7 +4,7 @@
  * 이미지를 import하지 않으므로 서버(route.ts)와 클라이언트(page.tsx) 양쪽에서 안전하게 쓸 수 있다.
  * 실제 에셋 매핑은 `emotion-assets.ts`에 있다.
  *
- * 감정을 추가하려면 여기에 키를 넣고 `emotion-assets.ts`에 에셋을 등록한다.
+ * 감정이나 의상을 추가하려면 여기에 키를 넣고 `emotion-assets.ts`에 에셋을 등록한다.
  * 에셋을 빼먹으면 빌드가 실패한다.
  */
 
@@ -52,4 +52,21 @@ export type Emotion = keyof typeof EMOTION_LABELS;
 export const ACTIVE_EMOTIONS = Object.keys(EMOTION_LABELS) as [
   Emotion,
   ...Emotion[],
+];
+
+/** assets/<outfit>/ 폴더와 1:1로 대응하는 의상 키와 한국어 라벨. */
+export const OUTFIT_LABELS = {
+  normal: "일상복",
+  classic: "클래식",
+  capy: "카피바라",
+} as const;
+
+export type Outfit = keyof typeof OUTFIT_LABELS;
+
+/** outfit 인자를 생략했거나 알 수 없는 값이 오면 쓰는 의상. */
+export const DEFAULT_OUTFIT: Outfit = "normal";
+
+export const ACTIVE_OUTFITS = Object.keys(OUTFIT_LABELS) as [
+  Outfit,
+  ...Outfit[],
 ];

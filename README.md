@@ -6,7 +6,8 @@ Claude.ai와 ChatGPT 같은 MCP App 호스트의 대화 본문에 클로드짱 �
 
 - MCP endpoint — `/mcp` (stateless Streamable HTTP)
 - 도구 — `express_emotion` 1개, read-only
-- 감정 — 31종 / webp 41장
+- 감정 — 31종
+- 의상 — 3종(`normal` / `classic` / `capy`) / webp 123장
 - 배포 — `main` push → Vercel Production 자동 배포
 - 결정과 근거 — [`DECISIONS.md`](./DECISIONS.md)
 
@@ -40,10 +41,19 @@ ChatGPT에서 Vercel Preview를 직접 테스트하려면 ChatGPT가 Preview URL
 express_emotion({
   emotion: "happy",                // 필수
   description: "잘 돼서 신나!",  // 선택, 최대 80자
+  outfit: "capy",                  // 선택, normal | classic | capy
 });
 ```
 
 `description`을 생략하면 감정의 한국어 라벨이 표시된다.
+
+`outfit`을 생략하면 `normal`로 그린다. 서버는 stateless라 의상을 기억하지 않는다. 의상을 바꾼 뒤에도 계속 그 옷을 입히려면 매 호출에 같은 `outfit`을 넘긴다.
+
+| 키 | 라벨 |
+|---|---|
+| `normal` | 일상복 |
+| `classic` | 클래식 |
+| `capy` | 카피바라 |
 
 **언제 호출할지는 이 리포의 책임이 아니다.** 이 리포는 도구와 렌더링 동작만 정의한다. 자발 호출 빈도 같은 행동 정책은 각 호스트의 사용자 지침/개인화 설정에서 관리한다.
 
@@ -85,7 +95,7 @@ app/
     iframe-bootstrap.tsx      sandboxed iframe 호환 shim
 proxy.ts                      iframe 자산/RSC 접근용 CORS
 baseUrl.ts                    production/preview/local base URL 계산
-assets/                       webp 41장
+assets/<outfit>/              의상별 webp 41장 × 3
 ```
 
 ### 렌더 상태
@@ -127,17 +137,24 @@ MCP App UI는 호스트의 opaque-origin sandboxed iframe에서 실행될 수 �
 
 ## 감정 추가하기
 
-1. 에셋을 `assets/`에 추가한다.
+1. 에셋을 모든 `assets/<outfit>/`에 추가한다.
 2. `app/emotions.ts`의 `EMOTION_LABELS`에 키와 라벨을 추가한다.
-3. `app/emotion-assets.ts`에 import와 맵 엔트리를 추가한다.
+3. `app/emotion-assets.ts`의 모든 의상에 import와 맵 엔트리를 추가한다.
 4. `npm run lint && npm run build`를 통과시킨다.
 5. 배포 후 해당 호스트에서 커넥터/앱을 갱신하고 새 대화에서 확인한다.
 
-`Record<Emotion, ...>`가 빠진 감정을 타입 오류로 잡고, 정적 import가 없는 파일을 빌드에서 잡는다. 변형 이미지는 별도 감정 키로 만들지 않고 같은 배열에 추가한다.
+`Record<Outfit, Record<Emotion, ...>>`가 빠진 의상·감정을 타입 오류로 잡고, 정적 import가 없는 파일을 빌드에서 잡는다. 변형 이미지는 별도 감정 키로 만들지 않고 같은 배열에 추가한다.
+
+## 의상 추가하기
+
+1. `assets/<outfit>/`에 기존 의상과 같은 파일명 41장을 넣는다.
+2. `app/emotions.ts`의 `OUTFIT_LABELS`에 키와 라벨을 추가한다.
+3. `app/emotion-assets.ts`의 `OUTFIT_ASSETS`에 새 의상 블록을 추가한다.
+4. `npm run lint && npm run build`를 통과시킨다.
 
 ### 에셋 관리
 
-`assets/`가 감정 에셋의 정본이다. 구 Railway 리포에서 복사하던 **Import emotion assets** workflow는 제거했다. 새 에셋은 이 리포에 직접 추가하고 일반 Git commit/push 흐름으로 관리한다.
+`assets/<outfit>/`가 감정 에셋의 정본이다. 구 Railway 리포에서 복사하던 **Import emotion assets** workflow는 제거했다. 새 에셋은 이 리포에 직접 추가하고 일반 Git commit/push 흐름으로 관리한다.
 
 바이너리 파일은 텍스트용 GitHub API wrapper를 통한 직접 업로드보다 일반 Git 전송을 우선한다. 필요하면 이 리포 내부에서 완결되는 전용 workflow를 별도로 만든다. 외부 리포를 에셋 원본으로 두지 않는다.
 
@@ -167,3 +184,11 @@ npm run dev
 `ext-apps 1.4.0+`는 MCP SDK `^1.29.0`을 요구하지만 `mcp-handler 1.0.7`은 SDK `1.25.2`를 peer dependency로 고정한다. 최신 `ext-apps`로 가려면 `mcp-handler`/MCP SDK 서버 스택도 함께 마이그레이션해야 한다. `mcp-handler 2.x`는 MCP SDK v2 기반의 breaking migration이므로 단순 dependency bump로 취급하지 않는다.
 
 이 리포는 [`amamirugi/claude-chan-emoticon-railway`](https://github.com/amamirugi/claude-chan-emoticon-railway)를 대체하는 실행·에셋 정본이다. 구 리포에 대한 런타임·빌드·에셋 소스 의존성은 없다.
+
+## 출처와 라이선스
+
+이 프로젝트는 Canister(canister2668)가 arca.live AI 채팅 채널 자료탭에 배포한 **Claude Desktop Emoticon MCP Server**를 바탕으로 한다.
+
+- 원본 배포 글: [Claude Desktop Emoticon MCP Server](https://arca.live/b/characterai/166128688) (2026-03-28), [클로드 데스크탑 이모션 MCP 서버 V3](https://arca.live/b/characterai/168123566) (2026-04-19)
+- 캐릭터 디자인과 감정 에셋 전부(`assets/`)는 원작자의 저작물이다.
+- 원본은 소스 코드와 에셋을 포함해 [CC BY-NC-SA 4.0](./LICENSE)으로 배포되며, 이 리포도 같은 라이선스를 따른다. 출처 표시 필수, 비영리, 동일 조건 변경 허락.

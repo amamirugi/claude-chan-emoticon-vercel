@@ -6,7 +6,12 @@ import {
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { ACTIVE_EMOTIONS, EMOTION_LABELS } from "@/app/emotions";
+import {
+  ACTIVE_EMOTIONS,
+  ACTIVE_OUTFITS,
+  DEFAULT_OUTFIT,
+  EMOTION_LABELS,
+} from "@/app/emotions";
 
 // MCP hosts may cache ui:// resources by URI. Derive the cache key from the
 // deployed revision so UI changes cannot accidentally reuse stale HTML.
@@ -71,6 +76,12 @@ const handler = createMcpHandler(async (server) => {
           .describe(
             "이미지 아래에 표시할 짧은 설명. 생략하면 감정의 한국어 라벨이 표시된다",
           ),
+        outfit: z
+          .enum(ACTIVE_OUTFITS)
+          .optional()
+          .describe(
+            `입을 의상. 서버는 의상을 기억하지 않으므로 바꾼 뒤에도 매 호출에 같은 값을 넘긴다. 생략하면 ${DEFAULT_OUTFIT}`,
+          ),
       },
       annotations: {
         readOnlyHint: true,
@@ -81,16 +92,17 @@ const handler = createMcpHandler(async (server) => {
         ui: { resourceUri: RESOURCE_URI },
       },
     },
-    async ({ emotion, description }) => ({
+    async ({ emotion, description, outfit = DEFAULT_OUTFIT }) => ({
       content: [
         {
           type: "text" as const,
-          text: `Displayed Claude-chan emotion: ${emotion}`,
+          text: `Displayed Claude-chan emotion: ${emotion} (outfit: ${outfit})`,
         },
       ],
       structuredContent: {
         emotion,
         description: description ?? EMOTION_LABELS[emotion],
+        outfit,
       },
     }),
   );
