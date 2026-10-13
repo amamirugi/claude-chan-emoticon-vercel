@@ -56,7 +56,7 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 - 저장된 의상은 배포 전체의 전역 값 하나다. 호스트가 대화 ID를 주지 않고 서버에 세션이 없어 키를 나눌 근거가 없다. Claude와 ChatGPT도 공유한다.
 - `set_outfit`에는 인증이 없다. 쓰기 대상이 의상 enum 하나뿐이라 피해 범위가 작다고 보고 감수한다.
 - 읽기는 `useCache: false`로 CDN 캐시를 건너뛴다. `set_outfit` 직후 호출에도 새 의상이 나오게 하기 위해서다.
-- 저장소(`BLOB_READ_WRITE_TOKEN`)가 없거나 읽기에 실패해도 감정 표시는 `normal`로 계속한다. `set_outfit`만 오류를 돌려준다.
+- 저장소(`BLOB_READ_WRITE_TOKEN` 또는 `BLOB_STORE_ID`)가 없거나 읽기에 실패해도 감정 표시는 `normal`로 계속한다. `set_outfit`만 오류를 돌려준다.
 - 대안 비교: 모델이 매 호출에 의상을 넘기는 방식은 새 대화에서 초기화된다. iframe storage는 opaque origin 호스트에서 보존이 보장되지 않는다. Upstash Redis는 Marketplace 설치가 필요하고, Edge Config 쓰기는 Vercel API 토큰을 따로 다뤄야 한다. 같은 Vercel 안에서 끝나는 private Blob을 택했다.
 - UI는 모르는 의상 값이 와도 감정 표시를 막지 않고 `normal`로 그린다.
 - `outfit`이 없는 tool input은 바로 그리지 않고 result를 최대 1.5초 기다린다. 바로 그리면 기본 의상이 잠깐 보였다가 저장된 의상으로 바뀐다. 시간 안에 렌더 가능한 result가 오지 않으면 input으로 그린다. 빈 result를 보내는 호스트에서도 감정은 보이게 하기 위해서다.

@@ -6,12 +6,15 @@ import { OUTFIT_LABELS, type Outfit } from "./emotions";
  *
  * 서버는 stateless라 호출 사이에 기억할 곳이 없다. 호스트도 대화 ID를 주지 않으므로
  * 키를 나눌 수 없고, 의상은 이 배포 전체가 공유하는 전역 값 하나다.
- * Blob store를 프로젝트에 연결하면 Vercel이 BLOB_READ_WRITE_TOKEN을 주입한다.
+ * Blob store를 프로젝트에 연결하면 Vercel이 BLOB_READ_WRITE_TOKEN을, 또는 OIDC 인증용
+ * BLOB_STORE_ID를 주입한다. SDK는 둘 다 스스로 해석한다.
  */
 const OUTFIT_PATHNAME = "state/outfit.json";
 
 export function isOutfitStoreConfigured(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(
+    process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID,
+  );
 }
 
 function isOutfit(value: unknown): value is Outfit {
@@ -42,7 +45,7 @@ export async function readStoredOutfit(): Promise<Outfit | null> {
 
 export async function writeStoredOutfit(outfit: Outfit): Promise<void> {
   if (!isOutfitStoreConfigured()) {
-    throw new Error("BLOB_READ_WRITE_TOKEN is not configured");
+    throw new Error("Blob store is not configured");
   }
   await put(OUTFIT_PATHNAME, JSON.stringify({ outfit }), {
     access: "private",

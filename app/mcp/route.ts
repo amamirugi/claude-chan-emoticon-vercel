@@ -145,7 +145,7 @@ const handler = createMcpHandler(async (server) => {
           content: [
             {
               type: "text" as const,
-              text: "Outfit storage is not configured on this deployment (missing BLOB_READ_WRITE_TOKEN). Pass outfit to express_emotion instead.",
+              text: "Outfit storage is not configured on this deployment (no Blob store connected). Pass outfit to express_emotion instead.",
             },
           ],
         };

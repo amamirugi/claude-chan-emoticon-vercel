@@ -56,7 +56,7 @@ set_outfit({ outfit: "capy" });    // 저장된 의상 변경
 ### 의상 저장소 설정
 
 1. Vercel 대시보드 → 프로젝트 → **Storage** → **Create** → **Blob**을 선택하고 access를 **Private**으로 만든다.
-2. 프로젝트에 연결하면 `BLOB_READ_WRITE_TOKEN`이 Production/Preview/Development에 주입된다.
+2. 프로젝트에 연결하면 `BLOB_READ_WRITE_TOKEN` 또는 OIDC용 `BLOB_STORE_ID`가 Production/Preview/Development에 주입된다. 코드는 둘 다 지원한다.
 3. 재배포한다. 환경 변수는 새 배포부터 적용된다.
 
 저장소가 없으면 `express_emotion`은 `normal`로 그리고, `set_outfit`은 설정되지 않았다는 오류를 돌려준다.
