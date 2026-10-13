@@ -11,7 +11,13 @@ import {
   ACTIVE_OUTFITS,
   DEFAULT_OUTFIT,
   EMOTION_LABELS,
+  OUTFIT_LABELS,
 } from "@/app/emotions";
+import {
+  isOutfitStoreConfigured,
+  readStoredOutfit,
+  writeStoredOutfit,
+} from "@/app/outfit-store";
 
 // MCP hosts may cache ui:// resources by URI. Derive the cache key from the
 // deployed revision so UI changes cannot accidentally reuse stale HTML.
@@ -27,6 +33,8 @@ const RESOURCE_URI = `ui://claude-chan-emoticon/index.html?v=${encodeURIComponen
 // 감정 목록도 나열하지 않는다. z.enum이 JSON 스키마에 이미 전부 넣는다.
 const TOOL_DESCRIPTION =
   "Claude-chan 이모티콘을 대화 본문에 이미지로 표시한다.";
+const SET_OUTFIT_DESCRIPTION =
+  "Claude-chan의 의상을 바꾼다. 바꾼 의상은 서버에 저장되어 이후 express_emotion 호출과 새 대화에도 유지된다.";
 
 async function fetchPageHtml(): Promise<string> {
   const response = await fetch(baseURL, { cache: "no-store" });
@@ -80,7 +88,7 @@ const handler = createMcpHandler(async (server) => {
           .enum(ACTIVE_OUTFITS)
           .optional()
           .describe(
-            `입을 의상. 서버는 의상을 기억하지 않으므로 바꾼 뒤에도 매 호출에 같은 값을 넘긴다. 생략하면 ${DEFAULT_OUTFIT}`,
+            "이번 호출에만 입힐 의상. 저장된 의상은 바꾸지 않는다. 생략하면 set_outfit으로 저장된 의상을 쓴다",
           ),
       },
       annotations: {
@@ -92,19 +100,71 @@ const handler = createMcpHandler(async (server) => {
         ui: { resourceUri: RESOURCE_URI },
       },
     },
-    async ({ emotion, description, outfit = DEFAULT_OUTFIT }) => ({
-      content: [
-        {
-          type: "text" as const,
-          text: `Displayed Claude-chan emotion: ${emotion} (outfit: ${outfit})`,
+    async ({ emotion, description, outfit: requestedOutfit }) => {
+      const outfit =
+        requestedOutfit ?? (await readStoredOutfit()) ?? DEFAULT_OUTFIT;
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Displayed Claude-chan emotion: ${emotion} (outfit: ${outfit})`,
+          },
+        ],
+        structuredContent: {
+          emotion,
+          description: description ?? EMOTION_LABELS[emotion],
+          outfit,
         },
-      ],
-      structuredContent: {
-        emotion,
-        description: description ?? EMOTION_LABELS[emotion],
-        outfit,
+      };
+    },
+  );
+
+  registerAppTool(
+    server,
+    "set_outfit",
+    {
+      title: "의상 변경",
+      description: SET_OUTFIT_DESCRIPTION,
+      inputSchema: {
+        outfit: z.enum(ACTIVE_OUTFITS).describe("갈아입을 의상"),
       },
-    }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta: {
+        ui: { resourceUri: RESOURCE_URI },
+      },
+    },
+    async ({ outfit }) => {
+      if (!isOutfitStoreConfigured()) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text" as const,
+              text: "Outfit storage is not configured on this deployment (missing BLOB_READ_WRITE_TOKEN). Pass outfit to express_emotion instead.",
+            },
+          ],
+        };
+      }
+      await writeStoredOutfit(outfit);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Saved Claude-chan outfit: ${outfit}`,
+          },
+        ],
+        structuredContent: {
+          emotion: "wink",
+          description: `${OUTFIT_LABELS[outfit]} 의상으로 갈아입었어요`,
+          outfit,
+        },
+      };
+    },
   );
 });
 

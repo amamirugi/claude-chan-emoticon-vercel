@@ -51,9 +51,15 @@ MCP 호스트는 UI 리소스 HTML을 opaque-origin sandboxed iframe에서 실�
 
 ### 의상(outfit)
 
-- 의상은 `express_emotion`의 선택 인자 `outfit`으로 받는다. 원본처럼 별도 `set_outfit` 툴을 두지 않는다.
-- 원본 `set_outfit`은 로컬 `state.json`에 현재 의상을 저장하는 구조다. 이 서버는 stateless Streamable HTTP라 호출 사이에 상태를 둘 곳이 없고, iframe storage도 호스트마다 보존이 보장되지 않는다. 그래서 현재 의상은 대화 맥락에서 모델이 기억하고 매 호출에 넘긴다.
-- `outfit`을 생략하면 서버가 `normal`을 채워 `structuredContent.outfit`으로 돌려준다. UI는 모르는 의상 값이 와도 감정 표시를 막지 않고 `normal`로 그린다.
+- 원본처럼 `set_outfit` 툴이 현재 의상을 저장하고, 새 대화에서도 유지한다. 원본은 로컬 `state.json`에 저장하지만 이 서버는 stateless Streamable HTTP라 Vercel private Blob(`state/outfit.json`)에 저장한다.
+- `express_emotion`의 `outfit`은 그 호출에만 적용하는 일회성 지정이고 저장된 의상을 바꾸지 않는다. 생략하면 서버가 저장된 의상, 없으면 `normal`을 채워 `structuredContent.outfit`으로 돌려준다.
+- 저장된 의상은 배포 전체의 전역 값 하나다. 호스트가 대화 ID를 주지 않고 서버에 세션이 없어 키를 나눌 근거가 없다. Claude와 ChatGPT도 공유한다.
+- `set_outfit`에는 인증이 없다. 쓰기 대상이 의상 enum 하나뿐이라 피해 범위가 작다고 보고 감수한다.
+- 읽기는 `useCache: false`로 CDN 캐시를 건너뛴다. `set_outfit` 직후 호출에도 새 의상이 나오게 하기 위해서다.
+- 저장소(`BLOB_READ_WRITE_TOKEN`)가 없거나 읽기에 실패해도 감정 표시는 `normal`로 계속한다. `set_outfit`만 오류를 돌려준다.
+- 대안 비교: 모델이 매 호출에 의상을 넘기는 방식은 새 대화에서 초기화된다. iframe storage는 opaque origin 호스트에서 보존이 보장되지 않는다. Upstash Redis는 Marketplace 설치가 필요하고, Edge Config 쓰기는 Vercel API 토큰을 따로 다뤄야 한다. 같은 Vercel 안에서 끝나는 private Blob을 택했다.
+- UI는 모르는 의상 값이 와도 감정 표시를 막지 않고 `normal`로 그린다.
+- `outfit`이 없는 tool input은 바로 그리지 않고 result를 최대 1.5초 기다린다. 바로 그리면 기본 의상이 잠깐 보였다가 저장된 의상으로 바뀐다. 시간 안에 렌더 가능한 result가 오지 않으면 input으로 그린다. 빈 result를 보내는 호스트에서도 감정은 보이게 하기 위해서다.
 - 의상 목록은 `app/emotions.ts`의 `OUTFIT_LABELS`가 정본이고, 원본처럼 폴더를 런타임에 자동 탐색하지 않는다. 정적 import와 타입으로 빠진 에셋을 빌드 타임에 잡기 위해서다.
 
 ### MCP App bridge 상태
@@ -251,4 +257,5 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - `modelcontextprotocol/ext-apps#702` 및 MCP Apps의 SDK v2 공식 지원이 완료된 뒤 `mcp-handler 2.x` / MCP SDK v2 migration 재검토
 - 말풍선/이미지 크기/여백 조정
 - 새 감정 에셋 추가
-- `feat/outfits` 브랜치의 의상 기능을 Preview에서 Claude.ai로 smoke test한 뒤 `main` 채택 여부 결정
+- private Blob store 생성·연결 후 `feat/outfits` Preview에서 `set_outfit` 저장과 새 대화 유지 smoke test
+- 확인 후 `main` 채택 여부 결정

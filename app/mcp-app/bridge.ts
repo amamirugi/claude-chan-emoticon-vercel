@@ -70,27 +70,61 @@ let snapshot: McpAppSnapshot = {
 const listeners = new Set<() => void>();
 let connectPromise: Promise<void> | null = null;
 
+// outfit 없는 tool input은 서버가 저장된 의상을 채운 result가 와야 정확히 그릴 수 있다.
+// 바로 그리면 기본 의상이 잠깐 보였다가 바뀌므로 result를 잠시 기다리고,
+// result가 비어 오는 호스트에서도 감정은 보이도록 시간이 지나면 input으로 그린다.
+const OUTFIT_RESULT_WAIT_MS = 1500;
+let pendingInput: { payload: McpRenderPayload; variantSeed: number } | null =
+  null;
+let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPendingInput(): void {
+  if (pendingTimer) clearTimeout(pendingTimer);
+  pendingTimer = null;
+  pendingInput = null;
+}
+
 function publish(patch: Partial<McpAppSnapshot>): void {
   snapshot = { ...snapshot, ...patch };
   for (const listener of listeners) listener();
 }
 
+function render(payload: McpRenderPayload, variantSeed: number): void {
+  writeStoredState({ payload, variantSeed });
+  publish({ payload, variantSeed });
+}
+
 function acceptToolInput(value: unknown): void {
+  clearPendingInput();
   if (!isRenderPayload(value)) return;
   const variantSeed = createVariantSeed();
-  writeStoredState({ payload: value, variantSeed });
-  publish({ payload: value, variantSeed });
+
+  if (typeof value.outfit === "string") {
+    render(value, variantSeed);
+    return;
+  }
+
+  const pending = { payload: value, variantSeed };
+  pendingInput = pending;
+  pendingTimer = setTimeout(() => {
+    if (pendingInput !== pending) return;
+    clearPendingInput();
+    render(pending.payload, pending.variantSeed);
+  }, OUTFIT_RESULT_WAIT_MS);
 }
 
 function acceptToolResult(value: unknown): void {
   if (!isRenderPayload(value)) return;
 
-  // A result belongs to the input already being rendered, so preserve its
-  // variant seed. If a host delivers a result without an input event, create
-  // a seed here so the result can still render on its own.
-  const variantSeed = snapshot.payload ? snapshot.variantSeed : createVariantSeed();
-  writeStoredState({ payload: value, variantSeed });
-  publish({ payload: value, variantSeed });
+  // A result belongs to the input already being rendered (or held back while
+  // waiting for its outfit), so preserve that variant seed. If a host delivers
+  // a result without an input event, create a seed here so the result can
+  // still render on its own.
+  const variantSeed =
+    pendingInput?.variantSeed ??
+    (snapshot.payload ? snapshot.variantSeed : createVariantSeed());
+  clearPendingInput();
+  render(value, variantSeed);
 }
 
 export function subscribeMcpApp(listener: () => void) {

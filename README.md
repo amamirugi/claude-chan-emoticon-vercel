@@ -5,7 +5,7 @@ Claude.ai와 ChatGPT 같은 MCP App 호스트의 대화 본문에 클로드짱 �
 도구 결과에 이미지 바이너리를 넣지 않는다. MCP 도구는 감정 키와 설명만 `structuredContent`로 전달하고, 이미지는 호스트가 띄운 sandboxed iframe 안에서 렌더링한다.
 
 - MCP endpoint — `/mcp` (stateless Streamable HTTP)
-- 도구 — `express_emotion` 1개, read-only
+- 도구 — `express_emotion`(read-only), `set_outfit`(현재 의상 저장)
 - 감정 — 31종
 - 의상 — 3종(`normal` / `classic` / `capy`) / webp 123장
 - 배포 — `main` push → Vercel Production 자동 배포
@@ -41,13 +41,25 @@ ChatGPT에서 Vercel Preview를 직접 테스트하려면 ChatGPT가 Preview URL
 express_emotion({
   emotion: "happy",                // 필수
   description: "잘 돼서 신나!",  // 선택, 최대 80자
-  outfit: "capy",                  // 선택, normal | classic | capy
+  outfit: "capy",                  // 선택, 이번 호출만 이 의상
 });
+
+set_outfit({ outfit: "capy" });    // 저장된 의상 변경
 ```
 
 `description`을 생략하면 감정의 한국어 라벨이 표시된다.
 
-`outfit`을 생략하면 `normal`로 그린다. 서버는 stateless라 의상을 기억하지 않는다. 의상을 바꾼 뒤에도 계속 그 옷을 입히려면 매 호출에 같은 `outfit`을 넘긴다.
+`set_outfit`은 현재 의상을 Vercel private Blob에 저장한다. 저장된 의상은 이후 `express_emotion` 호출과 새 대화에도 유지된다. `express_emotion`의 `outfit`은 그 호출에만 적용되고 저장된 의상을 바꾸지 않는다. `outfit`을 생략하면 저장된 의상, 저장된 값이 없으면 `normal`로 그린다.
+
+의상은 대화별이 아니라 배포 전체에 하나다. 호스트가 대화 ID를 주지 않아 키를 나눌 수 없으므로 Claude와 ChatGPT도 같은 의상을 공유한다. 인증이 없으므로 MCP URL을 아는 누구나 의상을 바꿀 수 있다. 바꿀 수 있는 것은 세 의상 중 하나뿐이다.
+
+### 의상 저장소 설정
+
+1. Vercel 대시보드 → 프로젝트 → **Storage** → **Create** → **Blob**을 선택하고 access를 **Private**으로 만든다.
+2. 프로젝트에 연결하면 `BLOB_READ_WRITE_TOKEN`이 Production/Preview/Development에 주입된다.
+3. 재배포한다. 환경 변수는 새 배포부터 적용된다.
+
+저장소가 없으면 `express_emotion`은 `normal`로 그리고, `set_outfit`은 설정되지 않았다는 오류를 돌려준다.
 
 | 키 | 라벨 |
 |---|---|
@@ -87,7 +99,8 @@ app/
   mcp/route.ts                MCP 서버: tool/resource 등록
   page.tsx                    iframe UI: payload를 이미지와 라벨로 렌더
   layout.tsx                  최소 Next.js layout
-  emotions.ts                 감정 키·한국어 라벨의 정본
+  emotions.ts                 감정·의상 키와 한국어 라벨의 정본
+  outfit-store.ts             현재 의상 저장(Vercel private Blob)
   emotion-assets.ts           감정 키 → 정적 에셋 배열
   hooks/use-mcp-app.ts        React용 얇은 external-store hook
   mcp-app/
