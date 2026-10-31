@@ -10,20 +10,28 @@
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.3.2",
-    "@modelcontextprotocol/sdk": "1.25.2",
-    "@vercel/blob": "2.8.0",
-    "mcp-handler": "1.0.7",
-    "next": "16.1.6",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@vercel/blob": "2.8.2",
+    "mcp-handler": "1.1.0",
+    "next": "16.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "16.4.3",
     "typescript": "^5"
+  },
+  "overrides": {
+    "mcp-handler": {
+      "@modelcontextprotocol/sdk": "$@modelcontextprotocol/sdk"
+    },
+    "@vercel/cli-config": {
+      "zod": "$zod"
+    }
   }
 }
