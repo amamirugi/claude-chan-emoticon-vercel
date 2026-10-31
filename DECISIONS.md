@@ -221,6 +221,7 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - `/img/:emotion` 라우트 → Next.js static import 유지.
 - 변형 에셋을 별도 감정 키로 승격 → 같은 키의 variants로 유지.
 - `ext-apps 1.7.5` 강제 설치 또는 `--legacy-peer-deps` → peer 불일치를 숨기므로 거부.
+  - 예외(2026-10-31): `package.json`의 `overrides`로 `mcp-handler`의 `@modelcontextprotocol/sdk`를 루트 버전(1.32.2)에, `@vercel/cli-config`의 `zod`를 루트 버전(^4.6.7)에 맞춘다. `mcp-handler` 1.x가 SDK를 1.26.0으로 정확히 고정해 보안 패치를 받을 수 없기 때문이다. 플래그로 숨기지 않고 `package.json`에 드러나는 명시적 예외로 두며, `mcp-handler` 2.x로 옮길 때 제거한다.
 - cleanup과 `mcp-handler 2.x` migration 동시 수행 → 원인/회귀 범위가 커지고 upstream `ext-apps`가 아직 v2로 이행 중이므로 보류.
 - `fetchPageHtml()` self-fetch 제거 → 현재 Vercel/Next MCP App 구조의 의도된 HTML 전달 패턴이다. 별도 standalone UI bundle로 재설계할 명확한 이유가 생기기 전에는 유지한다.
 - Railway 리포를 계속 에셋 정본으로 유지 → Vercel 리포가 필요한 에셋을 이미 자체 보유하고 있어 불필요한 외부 리포 의존성만 만든다.
@@ -245,6 +246,8 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - Railway 에셋 소스 의존성을 제거하고 Vercel 리포의 `assets/`를 에셋 정본으로 확정했다.
 - CCE renovation v1에서 식별한 필수 구조 부채는 정리 완료했다.
 - 2026-10-13 의상 기능(`feat/outfits`)을 private Blob store(`claude-chan-state-blob`, iad1, OIDC 연결)와 함께 브랜치 고정 Preview에서 검증했다. 서버 호출은 직접 확인했고, 사용자가 Claude.ai에서 의상 저장·일회성 의상·잔상 수정이 정상 동작함을 확인한 뒤 PR로 `main`에 채택했다.
+- 2026-10-31 의존성 보안 업데이트: `next` 16.4.3, `@modelcontextprotocol/sdk` 1.32.2, `mcp-handler` 1.1.0, `@vercel/blob` 2.8.2, `zod` ^4.6.7, 나머지는 `npm audit fix`. production audit은 moderate 1건(`@hono/node-server` `serveStatic`)만 남는다. SDK가 1.x 범위만 허용하고 이 앱은 Next 라우트를 쓰므로 해당 기능을 사용하지 않는다. 로컬 `next build`와 `initialize`·`tools/list`·`express_emotion`·`resources/list` 호출을 확인했다.
+- `set_outfit`은 인증 없이 전역 의상을 바꿀 수 있다. 값이 enum이고 데이터 노출이 없어 2026-10-31 태현 결정으로 그대로 둔다.
 
 ## 다음 단계
 
