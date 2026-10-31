@@ -248,6 +248,7 @@ Claude 내부 상태는 관측할 수 없으므로 정확한 내부 원인을 �
 - 2026-10-13 의상 기능(`feat/outfits`)을 private Blob store(`claude-chan-state-blob`, iad1, OIDC 연결)와 함께 브랜치 고정 Preview에서 검증했다. 서버 호출은 직접 확인했고, 사용자가 Claude.ai에서 의상 저장·일회성 의상·잔상 수정이 정상 동작함을 확인한 뒤 PR로 `main`에 채택했다.
 - 2026-10-31 의존성 보안 업데이트: `next` 16.4.3, `@modelcontextprotocol/sdk` 1.32.2, `mcp-handler` 1.1.0, `@vercel/blob` 2.8.2, `zod` ^4.6.7, 나머지는 `npm audit fix`. production audit은 moderate 1건(`@hono/node-server` `serveStatic`)만 남는다. SDK가 1.x 범위만 허용하고 이 앱은 Next 라우트를 쓰므로 해당 기능을 사용하지 않는다. 로컬 `next build`와 `initialize`·`tools/list`·`express_emotion`·`resources/list` 호출을 확인했다.
 - `set_outfit`은 인증 없이 전역 의상을 바꿀 수 있다. 값이 enum이고 데이터 노출이 없어 2026-10-31 태현 결정으로 그대로 둔다.
+- 2026-10-31 배포 보호·env 범위 점검: Vercel 배포 보호(Vercel Authentication·비밀번호·Trusted IPs)는 전부 꺼져 있고 preview 배포도 공개(200)다. Claude 운영 주소가 `git-main` 별칭이고 ChatGPT preview 등록에 보호 해제가 필요해서 그대로 둔다. env는 `BLOB_STORE_ID`와 `BLOB_WEBHOOK_PUBLIC_KEY`(둘 다 plain, 비밀 아님)뿐이고 production+preview 범위다. Blob 접근은 OIDC라 토큰 env가 없다. 공개 preview도 같은 Blob의 전역 의상을 바꿀 수 있지만, 위 `set_outfit` 결정과 같은 범위의 영향이다.
 
 ## 다음 단계
 
